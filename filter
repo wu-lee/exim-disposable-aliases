@@ -1,0 +1,63 @@
+# Exim filter
+
+# Set $no to the number of aliases for this local part (sans prefix)
+add ${lookup sqlite{/etc/exim-disposable-aliases/state.sql \
+     select count(*) from aliases where stem = ${quote_sqlite:$local_part}} \
+     {$value}{-1}} to n0
+
+# FIXME -1 => error
+
+# If there are none
+if $n0 is 0
+then
+    # It doesn't concern us. Skip to the next router
+    finish
+endif
+
+# Set $n1 to the number of counters for this prefix (without any number part).
+# This should be 0 or 1.
+add ${lookup sqlite{/etc/exim-disposable-aliases/state.sql \
+     select count(*) from counters \
+     where stem = ${quote_sqlite:${sg{$local_part_prefix}{[.][0-9]+$}{}}}} \
+     {$value}{-1}} to n1
+
+# FIXME -1 => error
+
+# If the counter count is 0
+if $n1 is 0
+then
+    # Initialiase it to the prefix's counter minus one (or 0 if absent)
+    if ${lookup sqlite{/etc/exim-disposable-aliases/state.sql \
+	 insert or replace into counters \
+	 set counter = ${if ${match}{[.]([0-9]+)$}{$1}{0}} - 1 \
+	 where stem = ${quote_sqlite:${sg{$local_part_prefix}{[.][0-9]+$}{}}}} \
+	 {$value}}
+	# And deliver it.  Done.
+	deliver
+	finish
+    endif
+    fail # FIXME how?
+    finish
+endif
+
+
+
+# If the prefix (sans count) is unseen
+#   if it contains a count > 0
+#     initialise sqlite to that many-1
+#     accept # accept by default
+#   else
+#     initialise to 0 # reject by default
+#     fail # or lookup default failure mode?
+#   end
+# else # it is known
+#   if sqlite lookup count > 0
+#     decrement count
+#     allow
+#   else if sqlite lookup count < 0
+#     allow
+#   else
+#     fail # or lookup default failure mode?
+#   end
+# end
+#     
