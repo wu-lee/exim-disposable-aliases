@@ -1,18 +1,19 @@
+
 -- Maps stems to one or more recipients
-create table aliases (
-   stem text,
-   recipient text,
-   primary key (stem, recipient)
-)
+CREATE TABLE aliases (
+   stem TEXT NOT NULL,
+   recipients TEXT NOT NULL,
+   PRIMARY KEY (stem, recipients)
+);
 
 -- Maps stems to zero or one counter
-create table counters {
-   stem text primary key;
-   counter int;
-}
+CREATE TABLE counters (
+   stem TEXT PRIMARY KEY NOT NULL,
+   counter INTEGER NOT NULL
+);
 
 -- Maps stems to zero or more failure modes
-create table failmodes {
-   stem text primary key;
-   mode text;
-}
+CREATE TABLE failmodes (
+   stem TEXT PRIMARY KEY NOT NULL,
+   mode TEXT NOT NULL
+);

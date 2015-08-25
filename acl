@@ -24,84 +24,87 @@ disposable_aliases:
     accept hosts = :
     accept authenticated = *
 
-    # Get the prefix without any numeric count part.
-    warn set acl_m_local_part_prefix = ${sg{$local_part_prefix}{[.][0-9]+$}{}}
+    # Get the prefix and any numeric count part.
+    warn set acl_m_local_part_prefix = ${sg{$local_part}{\N[.][^.]*$\N}{.}}
+    warn set acl_m_local_part_prefix_sans = ${sg{$acl_m_local_part_prefix}{\N[.]([0-9]+[.])?$\N}{}}
+    warn set acl_m_local_part_prefix_count = ${if match{$acl_m_local_part_prefix}{\N[.]([0-9]+)[.]$\N} {${eval10:$1-1}}{0}}
 
     # Find any known alias matching the local prefix (sans count)
     warn set acl_m_known_alias = ${lookup sqlite{DISP_ALIASES_DB \
         select count(*) from aliases \
-        where stem = ${quote_sqlite:$acl_m_local_part_prefix} \
+        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
         {$value}fail}
 
     # If the last lookup failed, log a warning and accept the message
-    accept condition = ${if eq{$acl_m_local_part_prefix}{fail}{}}
-        log_message = "failed to lookup alias for $local_part_prefix$local_part"
+    accept condition = ${if eq{$acl_m_local_part_prefix_sans}{fail}}
+        log_message = "failed to lookup alias for $local_part"
 
     # If this prefix is not a known alias, don't try and reject it.
-    accept condition = ${if eq{$acl_m_local_part_prefix}{fail}{}}
-        log_message = "failed to lookup alias for $local_part_prefix$local_part"
+    accept condition = ${if eq{$acl_m_local_part_prefix_sans}{fail}}
+        log_message = "failed to lookup alias for $local_part"
 
 
     # Get the number of counters for this prefix (without any number part).
     # This should be 0 or 1 (if the lookup succeeds).
     warn set acl_m_num_counters = ${lookup sqlite{DISP_ALIASES_DB \
         select count(*) from counters \
-        where stem = ${quote_sqlite:$acl_m_local_part_prefix} \
+        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
         {$value}fail}
 
     # Warn if the lookup fails, and pretend there is no counter.
-    warn condition ${if eq{$acl_m_num_counters}{fail} {1}}
+    warn condition = ${if eq{$acl_m_num_counters}{fail}}
         set acl_m_num_counters = 0
-        log_message = "failed to lookup number of counters for $local_part_prefix$local_part"
+        log_message = "failed to lookup number of counters for $local_part"
 
-    # If there is no counter yet, then initialiase it to the prefix's
-    # counter minus one (or 0 if absent), and accept it.
-    accept condition = !$acl_m_num_counters
+    # If there is no counter yet, then initialiase it to the precomputed counter,
+    warn !condition = $acl_m_num_counters
         log_message = "first sighting of email to $local_part_prefix$local_part" 
-        condition = ${lookup sqlite{DISP_ALIASES_DB \
-            insert or replace into counters \
-            set counter = ${if ${match}{[.]([0-9]+)$}{$1}{0}} - 1 \
-            where stem = ${quote_sqlite:$acl_m_local_part_prefix} \
+        continue = ${lookup sqlite{DISP_ALIASES_DB \
+            insert or replace into counters (stem, counter) values \
+            ("${quote_sqlite:$acl_m_local_part_prefix_sans}", $acl_m_local_part_prefix_count)} \
             {1}fail}
+        log_message = "failed initialising sqlite database counter for $local_part"
 
-    # If there is no counter here, something went wrong with the last
-    # step.  Losing the message because of an error would be bad, so
-    # log the error and accept it.
-    accept condition = !$acl_m_num_counters 
-        log_message = "failed initialising sqlite database counter for $local_part_prefix$local_part"
+    # If there was no counter yet, deny it if it was zero
+    deny !condition = $acl_m_num_counters
+         !condition = $acl_m_local_part_prefix_count
+
+    # ....and accept it otherwise.
+    accept !condition = $acl_m_num_counters
+        condition = $acl_m_local_part_prefix_count
+
 
     # If we get here the prefix (sans counts) has been seen before,
     # and has an initialised counter.  Get the value (which may be -1
     # if the counter is disabled).
     warn set acl_m_counter = ${lookup sqlite{DISP_ALIASES_DB \
         select counter from counters \
-        where stem = ${quote_sqlite:$acl_m_local_part_prefix} \
+        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
         {$value}{fail}}
 
     # Warn if the lookup failed.
-    warn condition ${if eq{$acl_m_counter}{fail} {1}}
-        log_message = "failed to lookup sqlite database counter for $local_part_prefix$local_part"
+    warn condition = ${if eq{$acl_m_counter}{fail}}
+        log_message = "failed to lookup sqlite database counter for $local_part"
 
     # If the counter is greater than zero, decrement the counter and
     # accept the message.
     accept condition = ${if > {$acl_m_counter}{0}}
 	    condition = ${lookup sqlite{DISP_ALIASES_DB \
-	        insert or replace into counters \
+	        update counters \
             set counter = counter - 1 \
-	        where stem = ${quote_sqlite:$acl_m_local_part_prefix} \
-	        {1}{fail}}
+	        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"}}
 
     # If the counter is greater then zero here, something went wrong
     # with the last step.  Log a warning and accept it.
     accept condition = ${if > {$acl_m_counter}{0}}
-        log_message = "failed to decrement the counter for $local_part_prefix$local_part"
+        log_message = "failed to decrement the counter for $local_part"
 
     # If we get here, and the prefix has a counter below zero,
     # it means it is disabled and we should always accept.
     accept condition = ${if < {$acl_m_counter}{0}}
-        log_message = "unconditional delivery to $local_part_prefix$local_part"
+        log_message = "unconditional delivery to $local_part"
 
     # Otherwise the counter is zero we deny it.
-    deny log_message = "no more mail to $local_part_prefix$local_part allowed"
+    deny log_message = "no more mail to $local_part allowed"
 
 
