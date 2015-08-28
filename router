@@ -33,21 +33,49 @@
 # 
 
 
+# is it one of our aliases?
+# no -> pass
+# is it a control message, sent by an authorised user on an safe connection?
+# yes -> pipe to control <cmd>
+# otherwise, route to recipients
 #
+# permit if
+# 
+# 
+# and local part contains stem
+# and subject matches command list
+# address is "|handler" if command
+# otherwise lookup
 
+# Note this router depends on variables defined by the disposable_aliases ACL.
 disposable_aliases:
   debug_print = "R: disposable_aliases for $local_part@$domain"
   driver = redirect
+
+  # Skip router unless local mail
   domains = +local_domains
+
+  # Skip router unless to one of our aliases 
+  condition = ${if !eq{$acl_m_known_alias}{}}
+
 #  allow_filter
   allow_fail
   allow_defer
 #  ignore_enotdir
   require_files = DISP_ALIASES_DB
   local_part_prefix = *.
+
+  # If is a control message and sent by an authorised user and on a safe connection, route to controller
+  # else route to recipients
+  data = ${if and{ {match{$h_subject}{\N^ *[!]\N}} \
+                   {or{ {eq{$sender_address_local_part}{root}} \
+                   {or{ {match_ip{$sender_host_address}{@[]}} \
+                        {!eq{$sender_host_authenticated}{}} } } } \
+      {|${quote:DISP_ALIASES_CONTROLLER} ${quote:DISP_ALIASES_DB} ${quote:$acl_m_local_part_prefix_sans} ${quote:$acl_m_local_part_s ${quote:$reply_to} ${quote:$h_subject}} \
+      {$acl_m_known_alias} \
+  }
+
   # FIXME deduplicate this query and components
   data = \
-  ${lookup sqlite {DISP_ALIASES_DB \
-  select recipients from aliases where stem="${quote_sqlite:${sg{$local_part_prefix}{\N[.]([0-9]+[.])?$\N}{}}}"}}
-
+  
 

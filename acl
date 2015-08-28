@@ -30,19 +30,18 @@ disposable_aliases:
     warn set acl_m_local_part_prefix_count = ${if match{$acl_m_local_part_prefix}{\N[.]([0-9]+)[.]$\N} {${eval10:$1-1}}{0}}
 
     # Find any known alias matching the local prefix (sans count)
+    # Failure used by the non-valid alias "@fail"
     warn set acl_m_known_alias = ${lookup sqlite{DISP_ALIASES_DB \
-        select count(*) from aliases \
+        select group_concat(recipients) from aliases \
         where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
-        {$value}fail}
+        {$value}{@fail}}
 
-    # If the last lookup failed, log a warning and accept the message
-    accept condition = ${if eq{$acl_m_local_part_prefix_sans}{fail}}
+    # If the last lookup failed, log a warning and skip this acl
+    accept condition = ${if eq{$acl_m_known_alias}{@fail}}
         log_message = "failed to lookup alias for $local_part"
 
-    # If this prefix is not a known alias, don't try and reject it.
-    accept condition = ${if eq{$acl_m_local_part_prefix_sans}{fail}}
-        log_message = "failed to lookup alias for $local_part"
-
+    # If this prefix is not a known alias, skip this acl
+    accept condition = ${if eq{$acl_m_known_alias}{}}
 
     # Get the number of counters for this prefix (without any number part).
     # This should be 0 or 1 (if the lookup succeeds).

@@ -22,6 +22,7 @@ INSTALL='ln -sf'
 SQLITE=sqlite3
 
 DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
+DISP_ALIASES_CONTROLLER=/usr/bin/disposable-aliases-controller
 CHECK_RCPT_LOCAL_ACL_FILE=$EXIM/local_disposable-aliases-include
 
 
@@ -36,7 +37,7 @@ cat >"$EXIM/conf.d/main/00_local-macros" <<EOF
 
 DISP_ALIASES_DB = $DISP_ALIASES_DB
 CHECK_RCPT_LOCAL_ACL_FILE = $CHECK_RCPT_LOCAL_ACL_FILE
-
+DISP_ALIASES_CONTROLLER = "|$DISP_ALIASES_CONTROLLER"
 EOF
 
 cat >"$CHECK_RCPT_LOCAL_ACL_FILE" <<EOF
@@ -49,5 +50,7 @@ EOF
 INSTALL "$HERE/acl" "$EXIM/conf.d/acl/10_local-disposable_aliases"
 
 INSTALL "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
+
+INSTALL "$HERE/controller" "$DISP_ALIASES_CONTROLLER"
 
 # FIXME restart
