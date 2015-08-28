@@ -2,7 +2,7 @@
 
 # requirements
 # sqlite3
-# exim-daemon-heavy
+# exim-daemon-heavy v 4.64 (?) for named acl_m variables
 
 function die() {
     echo $* >&2
@@ -12,8 +12,8 @@ function die() {
 SCRIPT=$(readlink -f ${BASH_SOURCE[0]})
 HERE=$(dirname "$SCRIPT")
 EXIM=/etc/exim4
-USER=Debian-Exim
-GROUP=Debian-Exim
+USER=Debian-exim
+GROUP=Debian-exim
 WRITABLE=0750
 
 # FIXME change this to install instead of link
@@ -47,9 +47,9 @@ deny !acl = disposable_aliases
 EOF
 
 # FIXME s/local-/local_/
-INSTALL "$HERE/acl" "$EXIM/conf.d/acl/10_local-disposable_aliases"
+$INSTALL "$HERE/acl" "$EXIM/conf.d/acl/10_local-disposable_aliases"
 
-INSTALL "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
+$INSTALL "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
 
 INSTALL "$HERE/controller" "$DISP_ALIASES_CONTROLLER"
 

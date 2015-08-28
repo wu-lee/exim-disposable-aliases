@@ -75,7 +75,4 @@ disposable_aliases:
       {$acl_m_known_alias} \
   }
 
-  # FIXME deduplicate this query and components
-  data = \
-  
 

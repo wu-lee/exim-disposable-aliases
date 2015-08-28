@@ -24,9 +24,15 @@ disposable_aliases:
     accept hosts = :
     accept authenticated = *
 
-    # Get the prefix and any numeric count part.
+    # Get the prefix, stem, and any numeric count part from the $local_part...
+    # ...Strip the final stem off to get the prefix.
     warn set acl_m_local_part_prefix = ${sg{$local_part}{\N[.][^.]*$\N}{.}}
+    # ...Strip the prefix off to get the stem
+    warn set acl_m_local_part_stem = ${sg{$local_part}{\N^.*[.]\N}{}}
+    # ...Strip the number (if present) from the prefix to get the prefix sans count
     warn set acl_m_local_part_prefix_sans = ${sg{$acl_m_local_part_prefix}{\N[.]([0-9]+[.])?$\N}{}}
+    # ...Get the number (if present) from the prefix and decrement if not zero.
+    # Else get zero.
     warn set acl_m_local_part_prefix_count = ${if match{$acl_m_local_part_prefix}{\N[.]([0-9]+)[.]$\N} {${eval10:$1-1}}{0}}
 
     # Find any known alias matching the local prefix (sans count)
@@ -45,9 +51,11 @@ disposable_aliases:
 
     # Get the number of counters for this prefix (without any number part).
     # This should be 0 or 1 (if the lookup succeeds).
-    warn set acl_m_num_counters = ${lookup sqlite{DISP_ALIASES_DB \
+    warn log_message = "handling disposable alias: $local_part"
+        set acl_m_num_counters = ${lookup sqlite{DISP_ALIASES_DB \
         select count(*) from counters \
-        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
+        where prefix = "${quote_sqlite:$acl_m_local_part_prefix_sans}" \
+        and stem = "${quote_sqlite:$acl_m_local_part_stem}"} \
         {$value}fail}
 
     # Warn if the lookup fails, and pretend there is no counter.
@@ -58,10 +66,13 @@ disposable_aliases:
     # If there is no counter yet, then initialiase it to the precomputed counter,
     warn !condition = $acl_m_num_counters
         log_message = "first sighting of email to $local_part_prefix$local_part" 
-        continue = ${lookup sqlite{DISP_ALIASES_DB \
-            insert or replace into counters (stem, counter) values \
-            ("${quote_sqlite:$acl_m_local_part_prefix_sans}", $acl_m_local_part_prefix_count)} \
+        set acl_m_initialised = ${lookup sqlite{DISP_ALIASES_DB \
+            insert or replace into counters (prefix, stem, counter) values \
+            ("${quote_sqlite:$acl_m_local_part_prefix_sans}", "${quote_sqlite:$acl_m_local_part_stem}", $acl_m_local_part_prefix_count)} \
             {1}fail}
+
+    # Accept it if something went wrong
+    accept condition = ${if eq{$acl_m_initialised}{fail}}
         log_message = "failed initialising sqlite database counter for $local_part"
 
     # If there was no counter yet, deny it if it was zero
@@ -78,7 +89,8 @@ disposable_aliases:
     # if the counter is disabled).
     warn set acl_m_counter = ${lookup sqlite{DISP_ALIASES_DB \
         select counter from counters \
-        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
+        where prefix = "${quote_sqlite:$acl_m_local_part_prefix_sans}" \
+        and stem = "${quote_sqlite:$acl_m_local_part_stem}"} \
         {$value}{fail}}
 
     # Warn if the lookup failed.
@@ -91,7 +103,8 @@ disposable_aliases:
 	    condition = ${lookup sqlite{DISP_ALIASES_DB \
 	        update counters \
             set counter = counter - 1 \
-	        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"}}
+	        where prefix = "${quote_sqlite:$acl_m_local_part_prefix_sans}" \
+	        and stem = "${quote_sqlite:$acl_m_local_part_stem}"}}
 
     # If the counter is greater then zero here, something went wrong
     # with the last step.  Log a warning and accept it.
@@ -104,6 +117,7 @@ disposable_aliases:
         log_message = "unconditional delivery to $local_part"
 
     # Otherwise the counter is zero we deny it.
-    deny log_message = "no more mail to $local_part allowed"
+    deny message = "no more mail to $local_part allowed"
+         log_message = "no more mail to $local_part allowed"
 
 

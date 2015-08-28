@@ -6,14 +6,11 @@ CREATE TABLE aliases (
    PRIMARY KEY (stem, recipients)
 );
 
--- Maps stems to zero or one counter
+-- Maps prefix+stems to zero or one counter
 CREATE TABLE counters (
-   stem TEXT PRIMARY KEY NOT NULL,
-   counter INTEGER NOT NULL
+   prefix TEXT NOT NULL,
+   stem TEXT NOT NULL,
+   counter INTEGER NOT NULL,
+   PRIMARY KEY (prefix, stem)
 );
 
--- Maps stems to zero or more failure modes
-CREATE TABLE failmodes (
-   stem TEXT PRIMARY KEY NOT NULL,
-   mode TEXT NOT NULL
-);
