@@ -48,6 +48,6 @@ disposable_aliases:
   # FIXME deduplicate this query and components
   data = \
   ${lookup sqlite {DISP_ALIASES_DB \
-  select recipients from aliases where stem="${quote_sqlite:${sg{$local_part_prefix}{\N[.]([0-9]+[.])?$\N}{}}}"}}
+  select recipients from aliases where stem="${quote_sqlite:$local_part}"}}
 
 
