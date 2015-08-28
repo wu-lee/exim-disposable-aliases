@@ -71,7 +71,7 @@ disposable_aliases:
                    {or{ {eq{$sender_address_local_part}{root}} \
                    {or{ {match_ip{$sender_host_address}{@[]}} \
                         {!eq{$sender_host_authenticated}{}} } } } \
-      {|${quote:DISP_ALIASES_CONTROLLER} ${quote:DISP_ALIASES_DB} ${quote:$acl_m_local_part_prefix_sans} ${quote:$acl_m_local_part_s ${quote:$reply_to} ${quote:$h_subject}} \
+      {|${quote:DISP_ALIASES_CONTROLLER} ${quote:DISP_ALIASES_DB} ${quote:$acl_m_local_part_prefix_sans} ${quote:$acl_m_local_part_stem} ${quote:$reply_to} ${quote:$h_subject}} \
       {$acl_m_known_alias} \
   }
 
