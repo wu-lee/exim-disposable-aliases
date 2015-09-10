@@ -61,18 +61,23 @@ disposable_aliases:
 #  allow_filter
   allow_fail
   allow_defer
+  allow_filter
+  user = Debian_exim
 #  ignore_enotdir
   require_files = DISP_ALIASES_DB
   local_part_prefix = *.
+  pipe_transport = pipe
 
   # If is a control message and sent by an authorised user and on a safe connection, route to controller
   # else route to recipients
-  data = ${if and{ {match{$h_subject}{\N^ *[!]\N}} \
-                   {or{ {eq{$sender_address_local_part}{root}} \
-                   {or{ {match_ip{$sender_host_address}{@[]}} \
-                        {!eq{$sender_host_authenticated}{}} } } } \
+  data = \
+  ${if and{ {match{$h_subject}{\N^ *[!]\N}} \
+            {or{ {eq{$sender_address_local_part}{root}} \
+                 {match_ip{$sender_host_address}{@[]}}}} \
+            {!eq{$sender_host_authenticated}{}}}\
       {|${quote:DISP_ALIASES_CONTROLLER} ${quote:DISP_ALIASES_DB} ${quote:$acl_m_local_part_prefix_sans} ${quote:$acl_m_local_part_stem} ${quote:$reply_to} ${quote:$h_subject}} \
       {$acl_m_known_alias} \
   }
+
 
 
