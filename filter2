@@ -1,51 +1,59 @@
 # Exim filter
 
-# Unless it is a control message and sent by an authorised user and on
-# a safe connection
-if
-not ( $h_subject: matches "^ *[!]" and
-      ( $sender_address_local_part: is "root" or 
-        $sender_host_address: is "127.0.0.1" or
-      	$sender_host_authenticated: is not ""    ) )
+# FIXME add more logging
+# FIXME use lookups to supply subject not text
+
+# If it is a known aliases, but not a control message sent by an authorised 
+# user on a safe connection...
+if $acl_m_known_alias does not match [[:graph:]]
+then
+  # Not a known alias, skip this router
+  finish
+endif
+
+if not ( $h_subject: matches "^ *[!]"
+         and ( $sender_address_local_part: is "root" 
+               or $sender_host_address: is "127.0.0.1"
+               or $sender_host_authenticated: is not "" ) )
 then
   # route to recipients
   deliver "$acl_m_known_alias"
 endif
 
-if $h_subject: matches "^ *[!] *on *$"
+if $h_subject: matches "^ *[!] *on *\\$"
 then 
   # set counter -1
-  add ${lookup sqlite{DISP_ALIASES_DB \
-        update counters \
-        set counter = -1 \
-        where prefix = "${quote_sqlite:$acl_m_local_part_prefix_sans}" \
-        and stem = "${quote_sqlite:$acl_m_local_part_stem}"} \
-        {$value}{-1}} \
-  to n1
-  seen mail subject "tuned on"
+  seen mail
+  subject "Enable disposable mail alias"
+  text "${lookup sqlite{/var/spool/exim4/db/disposable-aliases.db \
+        insert or replace into counters \
+        (prefix, stem, counter) \
+        values (\"${quote_sqlite:$acl_m_local_part_prefix_sans}\", \
+        \"${quote_sqlite:$acl_m_local_part_stem}\", -1)} \
+        {Turned on alias successfully. ($value)}{Error turning on alias}}"
 
-else if $h_subject: matches "^ *[!] *off *$"
+elif $h_subject: matches "^ *[!] *off *\\$"
 then
   # set counter 0
-  add ${lookup sqlite{DISP_ALIASES_DB \
-        update counters \
-        set counter = 0 \
-        where prefix = "${quote_sqlite:$acl_m_local_part_prefix_sans}" \
-        and stem = "${quote_sqlite:$acl_m_local_part_stem}"} \
-        {$value}{-1}} \
-  to n1
-  seen mail subject "turned off"
-else if $h_subject: matches "^ *[!] *report *$"
+  seen mail subject "Disable disposable mail alias"
+  text "${lookup sqlite{/var/spool/exim4/db/disposable-aliases.db \
+        insert or replace into counters \
+        (prefix, stem, counter) \
+        values (\"${quote_sqlite:$acl_m_local_part_prefix_sans}\", \
+        \"${quote_sqlite:$acl_m_local_part_stem}\", 0)} \
+        {Turned off alias successfully. ($value)}{Error turning off alias}}"
+
+elif $h_subject: matches "^ *[!] *report *\\$"
 then
   # report
-  mail to 
-  subject "disposable mail report"
-  text "${lookup sqlite{DISP_ALIASES_DB \
+  seen mail subject "Disposable mail report"
+  text "${lookup sqlite{/var/spool/exim4/db/disposable-aliases.db \
         select * from counters \
-        where prefix = "${quote_sqlite:$acl_m_local_part_prefix_sans}" \
-        and stem = "${quote_sqlite:$acl_m_local_part_stem}"} \
-        {$value}{-1}} \
-  to n1
+        where prefix = \"${quote_sqlite:$acl_m_local_part_prefix_sans}\" \
+        and stem = \"${quote_sqlite:$acl_m_local_part_stem}\"} \
+        {Report\n($value)}{Error generating report}}" 
+
+
 else
-  seen mail subject "unknown command: $h_subject"
+  seen mail subject "unknown command: [$h_subject:]"
 endif

@@ -15,19 +15,31 @@ EXIM=/etc/exim4
 USER=Debian-exim
 GROUP=Debian-exim
 WRITABLE=0750
+READABLE=0644
 
-# FIXME change this to install instead of link
-INSTALL='ln -sf'
+function myinstall() {
+    install -g root -o root -m $1 "$2" "$3"
+}
+
 
 SQLITE=sqlite3
 
 DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
 DISP_ALIASES_CONTROLLER=/usr/bin/disposable-aliases-controller
 CHECK_RCPT_LOCAL_ACL_FILE=$EXIM/local_disposable-aliases-include
+CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE=$EXIM/local_disposable-aliases-preamble
+DISP_ALIASES_FILTER=$EXIM/conf.d/disposable-aliases-filter
 
+if [[ "$FORCE" == "1" ]]; then
+   rm -vf $DISP_ALIASES_DB
+elif [[ "$FORCE" == "0" ]]; then
+   echo "Leaving as is: $DISP_ALIASES_DB"
+elif [[ -e "$DISP_ALIASES_DB" ]]; then
+   die "refusing to overwrite database $DISP_ALIASES_DB"
+else
+   $SQLITE "$DISP_ALIASES_DB" <"$HERE/schema.sql" || die "failed to install sqlite db"
+fi
 
-[ -e "$DISP_ALIASES_DB" ] && die "refusing to overwrite database $DISP_ALIASES_DB"
-$SQLITE "$DISP_ALIASES_DB" <"$HERE/schema.sql" || die "failed to install sqlite db"
 chown $USER:$GROUP "$DISP_ALIASES_DB"
 chmod $WRITABLE "$DISP_ALIASES_DB" 
 
@@ -37,20 +49,26 @@ cat >"$EXIM/conf.d/main/00_local-macros" <<EOF
 
 DISP_ALIASES_DB = $DISP_ALIASES_DB
 CHECK_RCPT_LOCAL_ACL_FILE = $CHECK_RCPT_LOCAL_ACL_FILE
+CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE = $CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE
 DISP_ALIASES_CONTROLLER = "|$DISP_ALIASES_CONTROLLER"
+DISP_ALIASES_FILTER = $DISP_ALIASES_FILTER
 EOF
 
 cat >"$CHECK_RCPT_LOCAL_ACL_FILE" <<EOF
 #include the disposable aliases acl
-deny !acl = disposable_aliases
+deny !acl = acl_disposable_aliases
 
 EOF
 
 # FIXME s/local-/local_/
-$INSTALL "$HERE/acl" "$EXIM/conf.d/acl/10_local-disposable_aliases"
+myinstall $READABLE "$HERE/acl" "$EXIM/conf.d/acl/10_local-disposable_aliases"
 
-$INSTALL "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
+myinstall $READABLE "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
 
-INSTALL "$HERE/controller" "$DISP_ALIASES_CONTROLLER"
+#myinstall $READABLE "$HERE/controller" "$DISP_ALIASES_CONTROLLER"
+
+myinstall $READABLE "$HERE/filter2" "$DISP_ALIASES_FILTER"
+
+myinstall $READABLE "$HERE/acl-preamble" "$CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE"
 
 # FIXME restart
