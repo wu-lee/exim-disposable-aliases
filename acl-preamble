@@ -1,0 +1,20 @@
+    # Unconditionally define some variables used later in acls,
+    #  routers and prefixes.
+
+    # Get the prefix, stem, and any numeric count part from the $local_part...
+    # ...Strip the final stem off to get the prefix.
+    warn set acl_m_local_part_prefix = ${sg{$local_part}{\N[.][^.]*$\N}{.}}
+    # ...Strip the prefix off to get the stem
+    warn set acl_m_local_part_stem = ${sg{$local_part}{\N^.*[.]\N}{}}
+    # ...Strip the number (if present) from the prefix to get the prefix sans count
+    warn set acl_m_local_part_prefix_sans = ${sg{$acl_m_local_part_prefix}{\N[.]([0-9]+[.])?$\N}{}}
+    # ...Get the number (if present) from the prefix and decrement if not zero.
+    # Else get zero.
+    warn set acl_m_local_part_prefix_count = ${if match{$acl_m_local_part_prefix}{\N[.]([0-9]+)[.]$\N} {${eval10:$1-1}}{0}}
+
+    # Find any known alias matching the local prefix (sans count)
+    # Failure used by the non-valid alias "@fail"
+    warn set acl_m_known_alias = ${lookup sqlite{DISP_ALIASES_DB \
+        select group_concat(recipients) from aliases \
+        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
+        {$value}{@fail}}
