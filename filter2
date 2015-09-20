@@ -18,6 +18,7 @@ if not ( $h_subject: matches "^ *[!]"
 then
   # route to recipients
   deliver "$acl_m_known_alias"
+  finish
 endif
 
 if $h_subject: matches "^ *[!] *on *\\$"
@@ -31,6 +32,7 @@ then
         values (\"${quote_sqlite:$acl_m_local_part_prefix_sans}\", \
         \"${quote_sqlite:$acl_m_local_part_stem}\", -1)} \
         {Turned on alias successfully. ($value)}{Error turning on alias}}"
+  finish
 
 elif $h_subject: matches "^ *[!] *off *\\$"
 then
@@ -42,6 +44,7 @@ then
         values (\"${quote_sqlite:$acl_m_local_part_prefix_sans}\", \
         \"${quote_sqlite:$acl_m_local_part_stem}\", 0)} \
         {Turned off alias successfully. ($value)}{Error turning off alias}}"
+  finish
 
 elif $h_subject: matches "^ *[!] *report *\\$"
 then
@@ -52,8 +55,9 @@ then
         where prefix = \"${quote_sqlite:$acl_m_local_part_prefix_sans}\" \
         and stem = \"${quote_sqlite:$acl_m_local_part_stem}\"} \
         {Report\n($value)}{Error generating report}}" 
-
-
+  finish
+ 
 else
   seen mail subject "unknown command: [$h_subject:]"
+  finish
 endif
