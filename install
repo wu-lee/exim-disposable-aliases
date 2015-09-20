@@ -32,6 +32,7 @@ DISP_ALIASES_FILTER=$EXIM/conf.d/disposable-aliases-filter
 
 if [[ "$FORCE" == "1" ]]; then
    rm -vf $DISP_ALIASES_DB
+   $SQLITE "$DISP_ALIASES_DB" <"$HERE/schema.sql" || die "failed to install sqlite db"
 elif [[ "$FORCE" == "0" ]]; then
    echo "Leaving as is: $DISP_ALIASES_DB"
 elif [[ -e "$DISP_ALIASES_DB" ]]; then
@@ -70,5 +71,21 @@ myinstall $READABLE "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_ali
 myinstall $READABLE "$HERE/filter2" "$DISP_ALIASES_FILTER"
 
 myinstall $READABLE "$HERE/acl-preamble" "$CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE"
+
+# insert inclusion of acl preable in 30_exim4_config_check_rcpt
+(cd $EXIM/conf.d/acl && patch -p0 <<EOF)
+--- 30_exim4-config_check_rcpt~ 2015-09-20 23:12:43.249240163 +0100
++++ 30_exim4-config_check_rcpt  2015-09-20 23:46:28.540146844 +0100
+@@ -8,6 +8,9 @@
+ # accepted or denied.
+ #
+ acl_check_rcpt:
++  .ifdef CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE
++  .include CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE
++  .endif
+  
+   # Accept if the source is local SMTP (i.e. not over TCP/IP). We do this by
+   # testing for an empty sending host field.
+EOF
 
 # FIXME restart
