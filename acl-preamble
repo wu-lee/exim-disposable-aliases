@@ -16,5 +16,5 @@
     # Failure used by the non-valid alias "@fail"
     warn set acl_m_known_alias = ${lookup sqlite{DISP_ALIASES_DB \
         select coalesce(group_concat(recipients), '') from aliases \
-        where stem = "${quote_sqlite:$acl_m_local_part_prefix_sans}"} \
+        where stem = "${quote_sqlite:$acl_m_local_part_stem}"} \
         {$value}{@fail}}
