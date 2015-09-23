@@ -1,7 +1,5 @@
 # This needs to be included before the acl and routers
 
 DISP_ALIASES_DB = /var/spool/exim/db/disposable-aliases.db
-DISP_ALIASES_CONTROLLER = |/root/gitworking/
-CHECK_RCPT_LOCAL_ACL_FILE = /root/gitworking/exim-disposable-aliases/acl-include
 DISP_ALIASES_FILTER = /etc/exim4/conf.d/disposable-aliases-filter
 
