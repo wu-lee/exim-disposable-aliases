@@ -1,0 +1,4 @@
+#!/usr/bin/perl -p
+
+# Substitute all instances of DISP_ALIASES_DB with the first argument
+s{DISP_ALIASES_DB}{$ENV{DISP_ALIASES_DB}}g
