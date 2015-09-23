@@ -136,6 +136,18 @@ then
         Turned off alias."
   finish
 
+elif $h_subject: matches "^ *[!] *([0-9]+) *\\$"
+then
+  # set counter N
+  seen mail subject "Set disposable mail alias counter to $1"
+  text "${lookup sqlite{DISP_ALIASES_DB \
+        insert or replace into counters \
+        (prefix, stem, counter) \
+        values ('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
+        '${quote_sqlite:$h_x-disposable-stem:}', $1)}{}{}} \
+        Set alias to $1."
+  finish
+
 elif $h_subject: matches "^ *[!] *report *\\$"
 then
   # report
@@ -148,6 +160,7 @@ then
   finish
  
 else
-  seen mail subject "unknown command: [$h_subject:]"
+  seen mail subject "unknown command"
+  text "Unknown command:\n[$h_subject:]"
   finish
 endif
