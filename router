@@ -2,52 +2,49 @@
 ### router/600_local-config_disposable_aliases
 #################################
 
-#------------------
-
-# supplementary aliases which allow arbitrary prefixes, delimited with a '.'
-# delivery or rejection is controlled by a sqlite database lookup
-
-# put this in a filter file
-# if an alias is not defined, go to next router
-
-# acl
-# if the prefix is unseen
-#   if it contains a count > 0
-#     initialise sqlite to that many-1
-#     accept # accept by default
-#   else
-#     initialise to 0 # reject by default
-#     fail # or lookup default failure mode?
-#   end
-# else # it is known
-#   if sqlite lookup count > 0
-#     decrement count
-#     allow
-#   else if sqlite lookup count < 0
-#     allow
-#   else
-#     fail # or lookup default failure mode?
-#   end
-# end
-#     
-# 
-
-
-# is it one of our aliases?
-# no -> pass
-# is it a control message, sent by an authorised user on an safe connection?
-# yes -> pipe to control <cmd>
-# otherwise, route to recipients
+# This implements supplementary email address aliases which allow
+# arbitrary prefixes that are separated from the local part with a
+# '.', and an optional counter.  Inspired by Spamgourmet.
 #
-# permit if
-# 
-# 
-# and local part contains stem
-# and subject matches command list
-# address is "|handler" if command
-# otherwise lookup
-
-# Note this router depends on variables defined by the disposable_aliases ACL.
+# e.g.
+#
+#    foo.stem@example.com   -  the alias 'stem' with a prefix 'foo'
+#    bar.5.stem@example.com -  the alias 'stem' again, with a different
+#                              prefix 'bar', and a counter 5.
+#
+# These both route to the same destination(s), as defined in a sqlite
+# database lookup from the 'stem' component.  There is a counter
+# stored in the database which records how many times each prefix has
+# been seen, and the filter either rejects or routes it accordingly.
+#
+# Initially, unseen prefixes have an (implicit) zero counter, which
+# means all email is rejected by default.
+#
+# If the counter is set to a positive value, then this is decremented
+# each time an email is delivered, until it reaches zero, after which
+# email to it is rejected and the counter not decremented any further.
+#
+# If the counter is negative, email is delivered, and the counter is
+# not decremented, which means all email is delivered by default.
+#
+# In cases like the second example address above, the first (and only
+# the first) email seen initialises the counter to the value in the
+# email prefix, allowing self-limiting email addresses to be
+# disseminated.
+#
+# Finally, the counter can be manually adjusted by control emails to
+# the alias in question, so long as the email is sent from a local
+# source, or via an authenticated connection.  The subject determines
+# the operation:
+#
+#     !on     - sets the counter to -1
+#     !off    - sets the counter to 0
+#     !N      - sets the counter to N
+#     !report - requests a report email
+#
+# Other than preceeding or trailing whitespace, the subject must start
+# with an exclamation mark, and match one of the above cases.
+ 
 disposable_aliases:
   debug_print = "R: disposable_aliases for $local_part_prefix$local_part@$domain"
   driver = redirect
@@ -55,19 +52,12 @@ disposable_aliases:
   # Skip router unless local mail
   domains = +local_domains
 
-  # Skip router unless to one of our aliases 
-  #condition = ${if !eq{$acl_m_known_alias}{}}
-
   allow_fail
   allow_defer
   allow_filter
   user = Debian-exim
-#  ignore_enotdir
   require_files = DISP_ALIASES_DB
   local_part_prefix = *.
-  pipe_transport = pipe
   reply_transport = address_reply
   file = DISP_ALIASES_FILTER
-
-
 
