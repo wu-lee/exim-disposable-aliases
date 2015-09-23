@@ -24,11 +24,8 @@ function myinstall() {
 
 SQLITE=sqlite3
 
-DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
-DISP_ALIASES_CONTROLLER=/usr/bin/disposable-aliases-controller
-CHECK_RCPT_LOCAL_ACL_FILE=$EXIM/local_disposable-aliases-include
-CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE=$EXIM/local_disposable-aliases-preamble
-DISP_ALIASES_FILTER=$EXIM/conf.d/disposable-aliases-filter
+export DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
+export DISP_ALIASES_FILTER=$EXIM/conf.d/disposable-aliases-filter
 
 if [[ "$FORCE" == "1" ]]; then
    rm -vf $DISP_ALIASES_DB
@@ -44,48 +41,17 @@ fi
 chown $USER:$GROUP "$DISP_ALIASES_DB"
 chmod $WRITABLE "$DISP_ALIASES_DB" 
 
-# FIXME copy exim configs
 cat >"$EXIM/conf.d/main/00_local-macros" <<EOF
-# This needs to be included before the acl and routers
+# This needs to be included before the routers
 
 DISP_ALIASES_DB = $DISP_ALIASES_DB
-CHECK_RCPT_LOCAL_ACL_FILE = $CHECK_RCPT_LOCAL_ACL_FILE
-CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE = $CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE
-DISP_ALIASES_CONTROLLER = "|$DISP_ALIASES_CONTROLLER"
 DISP_ALIASES_FILTER = $DISP_ALIASES_FILTER
 EOF
 
-cat >"$CHECK_RCPT_LOCAL_ACL_FILE" <<EOF
-#include the disposable aliases acl
-deny !acl = acl_disposable_aliases
-
-EOF
-
-# FIXME s/local-/local_/
-myinstall $READABLE "$HERE/acl" "$EXIM/conf.d/acl/10_local-disposable_aliases"
-
 myinstall $READABLE "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
 
-#myinstall $READABLE "$HERE/controller" "$DISP_ALIASES_CONTROLLER"
-
+./expand-macros <"$HERE/filter" >"$HERE/filter2"
 myinstall $READABLE "$HERE/filter2" "$DISP_ALIASES_FILTER"
 
-myinstall $READABLE "$HERE/acl-preamble" "$CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE"
 
-# insert inclusion of acl preable in 30_exim4_config_check_rcpt
-(cd $EXIM/conf.d/acl && patch -p0 <<EOF)
---- 30_exim4-config_check_rcpt~ 2015-09-20 23:12:43.249240163 +0100
-+++ 30_exim4-config_check_rcpt  2015-09-20 23:46:28.540146844 +0100
-@@ -8,6 +8,9 @@
- # accepted or denied.
- #
- acl_check_rcpt:
-+  .ifdef CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE
-+  .include CHECK_RCPT_LOCAL_ACL_PREAMBLE_FILE
-+  .endif
-  
-   # Accept if the source is local SMTP (i.e. not over TCP/IP). We do this by
-   # testing for an empty sending host field.
-EOF
-
-# FIXME restart
+service exim4 restart
