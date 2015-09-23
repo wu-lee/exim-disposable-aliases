@@ -1,63 +1,153 @@
 # Exim filter
 
-# Set $no to the number of aliases for this local part (sans prefix)
-add ${lookup sqlite{/etc/exim-disposable-aliases/state.sql \
-     select count(*) from aliases where stem = ${quote_sqlite:$local_part}} \
-     {$value}{-1}} to n0
+# FIXME add more logging
+# FIXME use lookups to supply subject not text
 
-# FIXME -1 => error
+# Get the prefix, stem, and any numeric count part from the $local_part...
+# ...Strip the final stem off to get the prefix.
+headers add "X-disposable-prefix: ${sg{$local_part}{\\N[.][^.]*$\\N}{.}}"
+testprint "prefix: $h_x-disposable-prefix:"
 
-# If there are none
-if $n0 is 0
+# ...Strip the prefix off to get the stem
+headers add "X-disposable-stem: ${sg{$local_part}{\\N^.*[.]\\N}{}}"
+testprint "stem: $h_x-disposable-stem:"
+
+# ...Strip the number (if present) from the prefix to get the prefix sans count
+headers add "X-disposable-prefix-sans: ${sg{$h_x-disposable-prefix:}{\\N[.]([0-9]+[.])?$\\N}{}}"
+testprint "prefix-sans: $h_x-disposable-prefix-sans:"
+
+# ...Get the number (if present) from the prefix. Else get zero.
+headers add "X-disposable-prefix-count: ${if match{$h_x-disposable-prefix:}{\\N[.]([0-9]+)[.]$\\N} {${eval10:$1}}{0}}"
+testprint "prefix-count: $h_x-disposable-prefix-count:"
+
+# Find any known alias matching the local prefix (sans count)
+# Failure used by the non-valid alias "@fail"
+headers add "X-disposable-alias: ${lookup sqlite{DISP_ALIASES_DB \
+  select coalesce(group_concat(recipients), '') from aliases \
+  where stem = '${quote_sqlite:$h_x-disposable-stem:}'} \
+  {$value}fail}"
+testprint "alias: $h_x-disposable-alias:"
+
+
+# Is it is a known alias?
+if $h_x-disposable-alias: does not match [[:graph:]]
 then
-    # It doesn't concern us. Skip to the next router
-    finish
+  testprint "Not a known alias, skip this router"
+  finish
 endif
 
-# Set $n1 to the number of counters for this prefix (without any number part).
-# This should be 0 or 1.
-add ${lookup sqlite{/etc/exim-disposable-aliases/state.sql \
-     select count(*) from counters \
-     where stem = ${quote_sqlite:${sg{$local_part_prefix}{[.][0-9]+$}{}}}} \
-     {$value}{-1}} to n1
+# Is it a control message sent by an authorised 
+# user on a safe connection?
+if $h_subject: matches "^ *[!]"
+then
+  testprint "subject might be a control message: $h_subject"
 
-# FIXME -1 => error
+  if $sender_address_local_part: is "root" 
+     or $sender_host_address: is "127.0.0.1"
+     or $sender_host_authenticated: is not "" 
+  then
+    testprint "source looks authenticated, $sender_address_local_part $sender_host_address $sender_host_authenticated"
+    add 1 to n1
+  else
+    testprint "source doesn't look authenticated, $sender_address_local_part $sender_host_address $sender_host_authenticated"
+  endif
+endif
 
-# If the counter count is 0
 if $n1 is 0
 then
-    # Initialiase it to the prefix's counter minus one (or 0 if absent)
-    if ${lookup sqlite{/etc/exim-disposable-aliases/state.sql \
-	 insert or replace into counters \
-	 set counter = ${if ${match}{[.]([0-9]+)$}{$1}{0}} - 1 \
-	 where stem = ${quote_sqlite:${sg{$local_part_prefix}{[.][0-9]+$}{}}}} \
-	 {$value}}
-	# And deliver it.  Done.
-	deliver
-	finish
-    endif
-    fail # FIXME how?
+  testprint "Not a valid control message"
+  # Perform the counter setting/incrementing logic
+
+  # Get the counter for this prefix (without any number part).  This
+  # should be an integer, or NULL (if this prefix is a new one).  It
+  # may be negative, indicating the alias is permanently enabled, zero
+  # if it is disabled, or positive, if it is limited.  We use the
+  # failure clause to map NULL into a default taken from the email,
+  # which is handled above and should be guaranteed a positive integer
+  # or zero.
+  logwrite "handling disposable alias: $local_part"
+  headers add "X-disposable-counter: \
+    ${lookup sqlite{DISP_ALIASES_DB \
+    select counter from counters \
+    where prefix = '${quote_sqlite:$h_x-disposable-prefix-sans:}' \
+    and stem = '${quote_sqlite:$h_x-disposable-stem:}'} \
+    {$value}{$h_x-disposable-prefix-count:}}"
+
+  # If the lookup failed, we get 'fail'. Bail out.
+  if $h_x-disposable-counter: is "fail"
+  then
+    fail text "Alias counter lookup failed, check your database config"
+  endif
+
+  testprint "counter is $h_x-disposable-counter:"
+
+  # Success: insert the counter back into the database,
+  # after decrementing if it is positive and not zero.
+  # We use a trick with the min/max functions to get that condition.
+  # counter  delta   max(counter, 0) min(max(counter, 0), 1)
+  # -n         0         0              0
+  #  0         0         0              0
+  #  n        -1         n              1
+  if "${lookup sqlite{DISP_ALIASES_DB \
+	insert or replace into counters (prefix, stem, counter) values \
+	('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
+	 '${quote_sqlite:$h_x-disposable-stem:}', \
+	  $h_x-disposable-counter: - min(max($h_x-disposable-counter:, 0), 1))} \
+	{1}{1}}" is "0"
+  then
+    fail text "failed initialising sqlite database counter to $h_x-disposable-counter: for $local_part"
+  endif
+
+  # If the counter was not zero, forward to the alias,
+  # else deny it
+  if $h_x-disposable-counter: is below 0
+  or $h_x-disposable-counter: is above 0
+  then
+    deliver $h_x-disposable-alias:
     finish
+  else
+    fail text "No more mail permitted to this alias"
+  endif
 endif
 
+testprint "This is a control message"
+if $h_subject: matches "^ *[!] *on *\\$"
+then 
+  # set counter -1
+  seen mail
+  subject "Enable disposable mail alias"
+  text "${lookup sqlite{DISP_ALIASES_DB \
+        insert or replace into counters \
+        (prefix, stem, counter) \
+        values ('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
+        '${quote_sqlite:$h_x-disposable-stem:}', -1)}{}{}} \
+        Turned on alias."
+  finish
 
+elif $h_subject: matches "^ *[!] *off *\\$"
+then
+  # set counter 0
+  seen mail subject "Disable disposable mail alias"
+  text "${lookup sqlite{DISP_ALIASES_DB \
+        insert or replace into counters \
+        (prefix, stem, counter) \
+        values ('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
+        '${quote_sqlite:$h_x-disposable-stem:}', 0)}{}{}} \
+        Turned off alias."
+  finish
 
-# If the prefix (sans count) is unseen
-#   if it contains a count > 0
-#     initialise sqlite to that many-1
-#     accept # accept by default
-#   else
-#     initialise to 0 # reject by default
-#     fail # or lookup default failure mode?
-#   end
-# else # it is known
-#   if sqlite lookup count > 0
-#     decrement count
-#     allow
-#   else if sqlite lookup count < 0
-#     allow
-#   else
-#     fail # or lookup default failure mode?
-#   end
-# end
-#     
+elif $h_subject: matches "^ *[!] *report *\\$"
+then
+  # report
+  seen mail subject "Disposable mail report"
+  text "${lookup sqlite{DISP_ALIASES_DB \
+        select * from counters \
+        where prefix = '${quote_sqlite:$h_x-disposable-prefix-sans:}' \
+        and stem = '${quote_sqlite:$h_x-disposable-stem:}'}{}{}} \
+        Report\n" 
+  finish
+ 
+else
+  seen mail subject "unknown command: [$h_subject:]"
+  finish
+endif
