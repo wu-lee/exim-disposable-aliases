@@ -1,7 +1,11 @@
 # Exim filter
 
-# FIXME add more logging
-# FIXME use lookups to supply subject not text
+if $local_part_prefix matches \N^(.*)[.][0-9]+[.]$\N
+then
+  # we have an alias with a numeric count
+
+  # get the alias
+elif
 
 # Get the prefix, stem, and any numeric count part from the $local_part...
 # ...Strip the final stem off to get the prefix.
