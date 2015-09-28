@@ -1,50 +1,42 @@
 # Exim filter
 
-if $local_part_prefix matches \N^(.*)[.][0-9]+[.]$\N
+# This match also captures the alias's prefix in $1, and the counter
+# in $3.  $local_part retains the alias stem.
+if $local_part_prefix does not match "^([^.]+)[.](([0-9]{1,5})[.])?\\$"
 then
-  # we have an alias with a numeric count
-
-  # get the alias
-elif
-
-# Get the prefix, stem, and any numeric count part from the $local_part...
-# ...Strip the final stem off to get the prefix.
-headers add "X-disposable-prefix: ${sg{$local_part}{\\N[.][^.]*$\\N}{.}}"
-testprint "prefix: $h_x-disposable-prefix:"
-
-# ...Strip the prefix off to get the stem
-headers add "X-disposable-stem: ${sg{$local_part}{\\N^.*[.]\\N}{}}"
-testprint "stem: $h_x-disposable-stem:"
-
-# ...Strip the number (if present) from the prefix to get the prefix sans count
-headers add "X-disposable-prefix-sans: ${sg{$h_x-disposable-prefix:}{\\N[.]([0-9]+[.])?$\\N}{}}"
-testprint "prefix-sans: $h_x-disposable-prefix-sans:"
-
-# ...Get the number (if present) from the prefix. Else get zero.
-headers add "X-disposable-prefix-count: ${if match{$h_x-disposable-prefix:}{\\N[.]([0-9]+)[.]$\\N} {${eval10:$1}}{0}}"
-testprint "prefix-count: $h_x-disposable-prefix-count:"
-
-# Find any known alias matching the local prefix (sans count)
-# Failure used by the non-valid alias "@fail"
-headers add "X-disposable-alias: ${lookup sqlite{DISP_ALIASES_DB \
-  select coalesce(group_concat(recipients), '') from aliases \
-  where stem = '${quote_sqlite:$h_x-disposable-stem:}'} \
-  {$value}fail}"
-testprint "alias: $h_x-disposable-alias:"
-
-
-# Is it is a known alias?
-if $h_x-disposable-alias: does not match [[:graph:]]
-then
-  testprint "Not a known alias, skip this router"
+  testprint "not a disposable mail candidate, skipping"
   finish
 endif
 
-# Is it a control message sent by an authorised 
-# user on a safe connection?
-if $h_subject: matches "^ *[!]"
+# Sanitize the email counter into a number in n0
+# After this we don't need $3
+add ${eval10:0$3} to n0
+
+testprint "got a disposable mail candidate \
+ ${if >{${strlen:$3}}{0}{with a counter: $n0}{with no counter}}"
+
+# Is $local_part an existing alias, i.e. does $local_part match a defined alias?
+# This match also captures the alias, if known, in $2, whilst preserving $1
+# in a somewhat nasty way forced upon us by exim's lack of
+# proper variables.
+if "${lookup sqlite{DISP_ALIASES_DB \
+  select coalesce(group_concat(recipients), '') from aliases \
+  where stem = '${quote_sqlite:$local_part}'} \
+  {$1 $value}{}}" does not match "(.*) (.*[[:graph:]].*)"
 then
-  testprint "subject might be a control message: $h_subject"
+  testprint "not a known alias '$local_part', skipping"
+  finish
+endif
+
+testprint "got a known alias '$local_part' for '$2' prefix '$1'"
+
+
+# Is it a control message sent by an authorised 
+# user on a safe connection?  Capture the command in $3, but 
+# again, preserve $1 and $2. Use n1 to preserve a the conclusion
+if "$1 $2 $h_subject" matches "^([^ ]+) ([^ ]+) *[!] *([^ ]+)"
+then
+  testprint "subject might be a control message: '$h_subject:'"
 
   if $sender_address_local_part: is "root" 
      or $sender_host_address: is "127.0.0.1"
@@ -60,30 +52,22 @@ endif
 if $n1 is 0
 then
   testprint "Not a valid control message"
-  # Perform the counter setting/incrementing logic
+  # Perform the counter setting/incrementing logic, then exit
 
-  # Get the counter for this prefix (without any number part).  This
+  # Get the counter for this prefix (without any number part) in $n2.  This
   # should be an integer, or NULL (if this prefix is a new one).  It
   # may be negative, indicating the alias is permanently enabled, zero
   # if it is disabled, or positive, if it is limited.  We use the
   # failure clause to map NULL into a default taken from the email,
   # which is handled above and should be guaranteed a positive integer
   # or zero.
-  logwrite "handling disposable alias: $local_part"
-  headers add "X-disposable-counter: \
-    ${lookup sqlite{DISP_ALIASES_DB \
+  add "${lookup sqlite{DISP_ALIASES_DB \
     select counter from counters \
-    where prefix = '${quote_sqlite:$h_x-disposable-prefix-sans:}' \
-    and stem = '${quote_sqlite:$h_x-disposable-stem:}'} \
-    {$value}{$h_x-disposable-prefix-count:}}"
+    where prefix = '${quote_sqlite:$1}' \
+    and stem = '${quote_sqlite:$local_part}'} \
+    {$value}{$n0}}" to n2
 
-  # If the lookup failed, we get 'fail'. Bail out.
-  if $h_x-disposable-counter: is "fail"
-  then
-    fail text "Alias counter lookup failed, check your database config"
-  endif
-
-  testprint "counter is $h_x-disposable-counter:"
+  testprint "counter is $n2"
 
   # Success: insert the counter back into the database,
   # after decrementing if it is positive and not zero.
@@ -93,77 +77,86 @@ then
   #  0         0         0              0
   #  n        -1         n              1
   if "${lookup sqlite{DISP_ALIASES_DB \
-	insert or replace into counters (prefix, stem, counter) values \
-	('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
-	 '${quote_sqlite:$h_x-disposable-stem:}', \
-	  $h_x-disposable-counter: - min(max($h_x-disposable-counter:, 0), 1))} \
-	{1}{1}}" is "0"
+        insert or replace into counters (prefix, stem, counter) values \
+        ('${quote_sqlite:$1}', \
+         '${quote_sqlite:$local_part}', \
+          $n2 - min(max($n2, 0), 1))} \
+        {1}{1}}" is "0"
   then
-    fail text "failed initialising sqlite database counter to $h_x-disposable-counter: for $local_part"
+    testprint "failed initialising sqlite database counter to $n2 for $local_part"
+    finish
   endif
 
   # If the counter was not zero, forward to the alias,
   # else deny it
-  if $h_x-disposable-counter: is below 0
-  or $h_x-disposable-counter: is above 0
+  if $n2 is below 0
+  or $n2 is above 0
   then
-    deliver $h_x-disposable-alias:
+    testprint "deliver to '$2': counter=$n2"
+    seen deliver $2
     finish
   else
-    fail text "No more mail permitted to this alias"
+    testprint "no more mail permitted to $1.$local_part: counter=$n2"
+    seen finish
   endif
 endif
 
-testprint "This is a control message"
-if $h_subject: matches "^ *[!] *on *\\$"
-then 
-  # set counter -1
+
+
+testprint "This is a control message, command '$3'"
+if $3 is "on"
+then
+  testprint "set '$1' counter on"
   seen mail
-  subject "Enable disposable mail alias"
+  subject "Enable disposable mail alias $1.$local_part"
   text "${lookup sqlite{DISP_ALIASES_DB \
         insert or replace into counters \
         (prefix, stem, counter) \
-        values ('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
-        '${quote_sqlite:$h_x-disposable-stem:}', -1)}{}{}} \
+        values ('${quote_sqlite:$1}', \
+        '${quote_sqlite:$local_part}', -1)}{}{}} \
         Turned on alias."
   finish
 
-elif $h_subject: matches "^ *[!] *off *\\$"
+elif $3 is "off"
 then
-  # set counter 0
-  seen mail subject "Disable disposable mail alias"
+  testprint "set '$1' counter off"
+  seen mail subject "Disable disposable mail alias  $1.$local_part"
   text "${lookup sqlite{DISP_ALIASES_DB \
         insert or replace into counters \
         (prefix, stem, counter) \
-        values ('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
-        '${quote_sqlite:$h_x-disposable-stem:}', 0)}{}{}} \
+        values ('${quote_sqlite:$1}', \
+        '${quote_sqlite:$local_part}', 0)}{}{}} \
         Turned off alias."
   finish
 
-elif $h_subject: matches "^ *[!] *([0-9]+) *\\$"
+elif "${if match{$3}{[^0-9]}{nonnumeric}{numeric}}" is "numeric"
 then
-  # set counter N
-  seen mail subject "Set disposable mail alias counter to $1"
+  testprint "set '$1' counter $3"
+  seen mail subject "Set disposable mail alias  $1.$local_part counter to $1"
   text "${lookup sqlite{DISP_ALIASES_DB \
         insert or replace into counters \
         (prefix, stem, counter) \
-        values ('${quote_sqlite:$h_x-disposable-prefix-sans:}', \
-        '${quote_sqlite:$h_x-disposable-stem:}', $1)}{}{}} \
-        Set alias to $1."
+        values ('${quote_sqlite:$1}', \
+        '${quote_sqlite:$local_part}', $3)}{}{}} \
+        Set alias counter to $3."
   finish
 
-elif $h_subject: matches "^ *[!] *report *\\$"
+elif $3 is "report"
 then
-  # report
-  seen mail subject "Disposable mail report"
+  testprint "report on '$1.$local_part'"
+  seen mail subject "Disposable mail report for $1.$local_part"
   text "${lookup sqlite{DISP_ALIASES_DB \
-        select * from counters \
-        where prefix = '${quote_sqlite:$h_x-disposable-prefix-sans:}' \
-        and stem = '${quote_sqlite:$h_x-disposable-stem:}'}{}{}} \
-        Report\n" 
+        select prefix, counter from counters \
+        where stem = '${quote_sqlite:$local_part}' \
+        order by prefix} \
+        {All *.$local_part alias deliveries remaining:\n\
+        \n$value\n\n\
+        Note, a count of -1 means all mail will be delivered.} \
+        {No prefixes defined for '$local_part' yet.}}\n"
   finish
  
 else
+  testprint "unknown command: '$h_subject:'"
   seen mail subject "unknown command"
   text "Unknown command:\n[$h_subject:]"
   finish

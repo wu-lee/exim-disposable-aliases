@@ -2,7 +2,6 @@
 
 # requirements
 # sqlite3
-# exim-daemon-heavy v 4.64 (?) for named acl_m variables
 
 function die() {
     echo $* >&2
