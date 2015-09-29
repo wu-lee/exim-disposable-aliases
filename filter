@@ -1,5 +1,12 @@
 # Exim filter
 
+# Special variables in this file:
+# n0/$2 is the counter in the local part prefix, if any.
+# n1 idenifies the control command type, or is 0 if not one.
+# n2 is the remaining deliveries counter (from the db if present, else the prefix)
+# $1 is the alias's prefix ID.
+# $3 is the actual control command extracted from the subject.
+
 # This match also captures the alias's prefix in $1, and the counter
 # in $3.  $local_part retains the alias stem.
 if $local_part_prefix does not match "^([^.]+)[.](([0-9]{1,5})[.])?\\$"
@@ -12,8 +19,8 @@ endif
 # After this we don't need $3
 add ${eval10:0$3} to n0
 
-testprint "got a disposable mail candidate \
- ${if >{${strlen:$3}}{0}{with a counter: $n0}{with no counter}}"
+testprint "got a disposable mail candidate with \
+ ${if >{${strlen:$3}}{0}{$n0}{no}} deliveries remaining"
 
 # Is $local_part an existing alias, i.e. does $local_part match a defined alias?
 # This match also captures the alias, if known, in $2, whilst preserving $1
@@ -33,9 +40,10 @@ testprint "got a known alias '$local_part' for '$2' prefix '$1'"
 # Set the logfile for this message
 logfile DISP_ALIASES_LOGDIR/$1.$local_part.log
 
-# Is it a control message sent by an authorised 
-# user on a safe connection?  Capture the command in $3, but 
-# again, preserve $1 and $2. Use n1 to preserve a the conclusion
+
+# Is it a control message sent by an authorised user on a safe
+# connection?  Capture the command in $3, but preserve $1 and
+# $2. Use n1 to preserve the conclusion
 if "$1 $2 $h_subject" matches "^([^ ]+) ([^ ]+) *[!] *([^ ]+)"
 then
   testprint "subject might be a control message: '$h_subject:'"
@@ -45,128 +53,183 @@ then
      or $sender_host_authenticated: is not "" 
   then
     testprint "source looks authenticated, $sender_address_local_part $sender_host_address $sender_host_authenticated"
-    add 1 to n1
+
+    # Identify the command, set n1 accordingly
+    if $3 is "on" 
+    then
+      add 1 to n1
+
+    elif $3 is "off"
+    then
+      add 2 to n1
+
+    elif "${if match{$3}{[^0-9]}{nonnumeric}{numeric}}" is "numeric"
+    then
+      add 3 to n1
+
+    elif $3 is "report"
+    then
+      testprint "This is a report command on '$1.$local_part'"
+      logwrite "$tod_log\t$local_part_prefix\treport\t$sender_address\t$return_path\t$h_subject"
+      seen mail subject "Disposable mail report for *.$local_part@$domain"
+      text "${lookup sqlite{DISP_ALIASES_DB \
+	    select prefix, remaining, delivered, dropped from counters \
+	    where stem = '${quote_sqlite:$local_part}' \
+	    order by prefix} \
+	    {All *.$local_part alias deliveries remaining:\n\
+	    \n$value\n\n\
+	    Note, a count of -1 means all mail will be delivered.} \
+	    {No prefixes defined for '$local_part' yet.}}\n"
+      finish
+
+
+    else # unknown
+      testprint "unknown command: '$h_subject:'"
+      logwrite "$tod_log\t$local_part_prefix\tinvalid-command\t$sender_address\t$return_path\t$h_subject"
+      seen mail subject "unknown command"
+      text "Unknown command:\n[$h_subject:]"
+      finish
+    endif
+
   else
     testprint "source doesn't look authenticated, $sender_address_local_part $sender_host_address $sender_host_authenticated"
   endif
 endif
 
-if $n1 is 0
+
+
+# Get the remaining deliveries counter for this prefix (without any
+# number part) in $n2.  This should be an integer, or NULL (if this
+# prefix is a new one).  It may be negative, indicating the alias is
+# permanently enabled, zero if it is disabled, or positive, if it is
+# limited.  We use the failure clause to map NULL into a default taken
+# from the email, which is handled above and should be guaranteed a
+# positive integer or zero. Note this needs to be done before we
+# insert a record.
+add "${lookup sqlite{DISP_ALIASES_DB \
+  select remaining from counters \
+  where prefix = '${quote_sqlite:$1}' \
+  and stem = '${quote_sqlite:$local_part}'} \
+  {$value}{$n0}}" to n2
+
+
+# Following queries need to update-or-insert a counter. Upsert-style
+# operations in sqlite are complicated to achieve, so we ensure the
+# appropriate counter record exists, meaning we can subsequently just
+# do simple updates.
+# Condition is for side-effects only.  
+if "${lookup sqlite{DISP_ALIASES_DB \
+    insert or rollback into counters \
+    (prefix, stem) values \
+    ('${quote_sqlite:$1}', \
+   '${quote_sqlite:$local_part}')} \
+   {1}{1}}" is "0"
 then
+endif
+
+# Now handle each remaining case of n1
+if $n1 is 0
+then 
   testprint "Not a valid control message"
+
   # Perform the counter setting/incrementing logic, then exit
 
-  # Get the counter for this prefix (without any number part) in $n2.  This
-  # should be an integer, or NULL (if this prefix is a new one).  It
-  # may be negative, indicating the alias is permanently enabled, zero
-  # if it is disabled, or positive, if it is limited.  We use the
-  # failure clause to map NULL into a default taken from the email,
-  # which is handled above and should be guaranteed a positive integer
-  # or zero.
-  add "${lookup sqlite{DISP_ALIASES_DB \
-    select counter from counters \
-    where prefix = '${quote_sqlite:$1}' \
-    and stem = '${quote_sqlite:$local_part}'} \
-    {$value}{$n0}}" to n2
+  testprint "$n2 remaining deliveries"
 
-  testprint "counter is $n2"
-
-  # Success: insert the counter back into the database,
+  # Insert the remaining deliveries counter back into the database,
   # after decrementing if it is positive and not zero.
   # We use a trick with the min/max functions to get that condition.
-  # counter  delta   max(counter, 0) min(max(counter, 0), 1)
+  # remaining  delta   max(remaining, 0) min(max(remaining, 0), 1)
   # -n         0         0              0
   #  0         0         0              0
   #  n        -1         n              1
   if "${lookup sqlite{DISP_ALIASES_DB \
-        insert or replace into counters (prefix, stem, counter) values \
-        ('${quote_sqlite:$1}', \
-         '${quote_sqlite:$local_part}', \
-          $n2 - min(max($n2, 0), 1))} \
-        {1}{1}}" is "0"
+	update counters set \
+	remaining = $n2 - min(max($n2, 0), 1) \
+	where prefix = '${quote_sqlite:$1}' \
+	and stem = '${quote_sqlite:$local_part}'} \
+	{1}{1}}" is "0"
   then
-    testprint "failed initialising sqlite database counter to $n2 for $local_part"
-    finish
   endif
 
-  # If the counter was not zero, forward to the alias,
-  # else deny it
-  if $n2 is below 0
-  or $n2 is above 0
+  # If the counter was not zero, deliver the message, else deny it
+  if $n2 is not 0
   then
-    testprint "deliver to '$2': counter=$n2"
+    testprint "deliver to '$2': remaining=$n2"
     logwrite "$tod_log\t$local_part_prefix\tdelivered=$n2\t$sender_address\t$return_path\t$h_subject"
+
+    # Increment stats.  Condition is for side-effects only.
+    if "${lookup sqlite{DISP_ALIASES_DB \
+	  update counters set delivered = delivered + 1 \
+	  where prefix='${quote_sqlite:$1}' \
+	  and stem='${quote_sqlite:$local_part}'}\
+	  {1}{1}}" is "0"
+    then
+    endif
+
     seen deliver $2
     finish
+
   else
-    testprint "no more mail permitted to $1.$local_part: counter=$n2"
+    testprint "no more mail permitted to $1.$local_part: remaining=$n2"
     logwrite "$tod_log\t$local_part_prefix\tdropped\t$sender_address\t$return_path\t$h_subject"
+
+    # Increment stats.  Condition is for side-effects only.
+    if "${lookup sqlite{DISP_ALIASES_DB \
+	  update counters set dropped = dropped + 1 \
+	  where prefix='${quote_sqlite:$1}' \
+	  and stem='${quote_sqlite:$local_part}'}\
+	  {1}{1}}" is "0"
+    then
+    endif
+
     seen finish
   endif
-endif
 
-
-
-testprint "This is a control message, command '$3'"
-if $3 is "on"
+elif $n1 is 1
 then
-  testprint "set '$1' counter on"
+  testprint "enable prefix '$1'"
+
   logwrite "$tod_log\t$local_part_prefix\tenabled\t$sender_address\t$return_path\t$h_subject"
   seen mail
-  subject "Enable disposable mail alias $1.$local_part"
+  subject "Enabled disposable mail alias $1.$local_part@domain"
   text "${lookup sqlite{DISP_ALIASES_DB \
-        insert or replace into counters \
-        (prefix, stem, counter) \
-        values ('${quote_sqlite:$1}', \
-        '${quote_sqlite:$local_part}', -1)}{}{}} \
-        Turned on alias."
+	update counters set \
+	remaining = -1 \
+	where prefix = '${quote_sqlite:$1}' \
+	and stem = '${quote_sqlite:$local_part}'} \
+	{}{}} \
+	Enabled $1.$local_part@$domain."
   finish
 
-elif $3 is "off"
+elif $n1 is 2
 then
-  testprint "set '$1' counter off"
+  testprint "disable prefix '$1'"
+
   logwrite "$tod_log\t$local_part_prefix\tdisabled\t$sender_address\t$return_path\t$h_subject"
-  seen mail subject "Disable disposable mail alias  $1.$local_part"
+  seen mail subject "Disabled disposable mail alias $1.$local_part@$domain"
   text "${lookup sqlite{DISP_ALIASES_DB \
-        insert or replace into counters \
-        (prefix, stem, counter) \
-        values ('${quote_sqlite:$1}', \
-        '${quote_sqlite:$local_part}', 0)}{}{}} \
-        Turned off alias."
+	update counters set \
+	remaining = 0 \
+	where prefix = '${quote_sqlite:$1}' \
+	and stem = '${quote_sqlite:$local_part}'} \
+	{}{}} \
+	Disabled $1.$local_part@$domain."
   finish
 
-elif "${if match{$3}{[^0-9]}{nonnumeric}{numeric}}" is "numeric"
+elif $n1 is 3
 then
-  testprint "set '$1' counter $3"
+  testprint "allow $3 more to prefix '$1'"
+
   logwrite "$tod_log\t$local_part_prefix\tset=$3\t$sender_address\t$return_path\t$h_subject"
-  seen mail subject "Set disposable mail alias  $1.$local_part counter to $1"
+  seen mail subject "Allow $3 more deliveries to $1.$local_part@$domain"
   text "${lookup sqlite{DISP_ALIASES_DB \
-        insert or replace into counters \
-        (prefix, stem, counter) \
-        values ('${quote_sqlite:$1}', \
-        '${quote_sqlite:$local_part}', $3)}{}{}} \
-        Set alias counter to $3."
+	update counters set \
+	remaining = $3 \
+	where prefix = '${quote_sqlite:$1}' \
+	and stem = '${quote_sqlite:$local_part}'} \
+	{}{}} \
+	Allow $3 more deliveries to $1.$local_part@$domain."
   finish
 
-elif $3 is "report"
-then
-  testprint "report on '$1.$local_part'"
-  logwrite "$tod_log\t$local_part_prefix\treport\t$sender_address\t$return_path\t$h_subject"
-  seen mail subject "Disposable mail report for $1.$local_part"
-  text "${lookup sqlite{DISP_ALIASES_DB \
-        select prefix, counter from counters \
-        where stem = '${quote_sqlite:$local_part}' \
-        order by prefix} \
-        {All *.$local_part alias deliveries remaining:\n\
-        \n$value\n\n\
-        Note, a count of -1 means all mail will be delivered.} \
-        {No prefixes defined for '$local_part' yet.}}\n"
-  finish
- 
-else
-  testprint "unknown command: '$h_subject:'"
-  logwrite "$tod_log\t$local_part_prefix\tinvalid-command\t$sender_address\t$return_path\t$h_subject"
-  seen mail subject "unknown command"
-  text "Unknown command:\n[$h_subject:]"
-  finish
 endif

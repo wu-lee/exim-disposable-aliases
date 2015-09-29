@@ -84,11 +84,11 @@ not a disposable mail candidate
 
 foo.zoo@bar
 test 
-got a disposable mail candidate with no counter
+got a disposable mail candidate with no deliveries remaining
 
 foo.2.zoo@bar
 test 
-got a disposable mail candidate with a counter: 2
+got a disposable mail candidate with 2 deliveries remaining
 
 alpha.pimpernel@bar
 test 
@@ -100,95 +100,95 @@ got a known alias 'pimpernel' for 'percy' prefix 'beta'
 
 alpha.pimpernel@bar
 test 
-no more mail permitted to alpha.pimpernel: counter=0
+no more mail permitted to alpha.pimpernel: remaining=0
 
 alpha.pimpernel@bar
 !on 
-set 'alpha' counter on
+enable prefix 'alpha'
 
 alpha.pimpernel@bar
 test 
-deliver to 'percy': counter=-1
+deliver to 'percy': remaining=-1
 
 alpha.pimpernel@bar
 test 
-deliver to 'percy': counter=-1
+deliver to 'percy': remaining=-1
 
 alpha.pimpernel@bar
 !off 
-set 'alpha' counter off
+disable prefix 'alpha'
 
 alpha.pimpernel@bar
 test 
-no more mail permitted to alpha.pimpernel: counter=0
+no more mail permitted to alpha.pimpernel: remaining=0
 
 alpha.pimpernel@bar
 test 
-no more mail permitted to alpha.pimpernel: counter=0
+no more mail permitted to alpha.pimpernel: remaining=0
 
 alpha.pimpernel@bar
 !2 
-set 'alpha' counter 2
+allow 2 more to prefix 'alpha'
 
 alpha.pimpernel@bar
 test 
-deliver to 'percy': counter=2
+deliver to 'percy': remaining=2
 
 alpha.pimpernel@bar
 test 
-deliver to 'percy': counter=1
+deliver to 'percy': remaining=1
 
 alpha.pimpernel@bar
 test 
-no more mail permitted to alpha.pimpernel: counter=0
+no more mail permitted to alpha.pimpernel: remaining=0
 
 alpha.pimpernel@bar
 test 
-no more mail permitted to alpha.pimpernel: counter=0
+no more mail permitted to alpha.pimpernel: remaining=0
 
 alpha.pimpernel@bar
 !report 
 All *.pimpernel alias deliveries remaining:
-prefix=alpha counter=0
-prefix=beta counter=0
+prefix=alpha remaining=0 delivered=4 dropped=6 
+prefix=beta remaining=0 delivered=0 dropped=1 
 
 foo.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha counter=0 
-prefix=beta counter=0 
+prefix=alpha remaining=0 delivered=4 dropped=6 
+prefix=beta remaining=0 delivered=0 dropped=1 
 
 ?.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha counter=0 
-prefix=beta counter=0 
+prefix=alpha remaining=0 delivered=4 dropped=6 
+prefix=beta remaining=0 delivered=0 dropped=1 
 
 foo.3.pimpernel@bar
 test
-deliver to 'percy': counter=3
+deliver to 'percy': remaining=3
 
 foo.pimpernel@bar
 test
-deliver to 'percy': counter=2
+deliver to 'percy': remaining=2
 
 foo.9.pimpernel@bar
 test
-deliver to 'percy': counter=1
+deliver to 'percy': remaining=1
 
 foo.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha counter=0 
-prefix=beta counter=0 
-prefix=foo counter=0 
+prefix=alpha remaining=0 delivered=4 dropped=6 
+prefix=beta remaining=0 delivered=0 dropped=1 
+prefix=foo remaining=0 delivered=3 dropped=0 
 
 ?.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha counter=0 
-prefix=beta counter=0 
-prefix=foo counter=0 
+prefix=alpha remaining=0 delivered=4 dropped=6 
+prefix=beta remaining=0 delivered=0 dropped=1 
+prefix=foo remaining=0 delivered=3 dropped=0 
 
 ..pimpernel@bar
 test
@@ -216,7 +216,7 @@ not a disposable mail candidate, skipping
 
 a.99999.pimpernel@bar
 test
-got a disposable mail candidate with a counter: 99999
+got a disposable mail candidate with 99999 deliveries remaining
 EOF
 
 echo "failed: $fails"
