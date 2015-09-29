@@ -30,6 +30,8 @@ endif
 
 testprint "got a known alias '$local_part' for '$2' prefix '$1'"
 
+# Set the logfile for this message
+logfile DISP_ALIASES_LOGDIR/$1.$local_part.log
 
 # Is it a control message sent by an authorised 
 # user on a safe connection?  Capture the command in $3, but 
@@ -93,10 +95,12 @@ then
   or $n2 is above 0
   then
     testprint "deliver to '$2': counter=$n2"
+    logwrite "$tod_log\t$local_part_prefix\tdelivered=$n2\t$sender_address\t$return_path\t$h_subject"
     seen deliver $2
     finish
   else
     testprint "no more mail permitted to $1.$local_part: counter=$n2"
+    logwrite "$tod_log\t$local_part_prefix\tdropped\t$sender_address\t$return_path\t$h_subject"
     seen finish
   endif
 endif
@@ -107,6 +111,7 @@ testprint "This is a control message, command '$3'"
 if $3 is "on"
 then
   testprint "set '$1' counter on"
+  logwrite "$tod_log\t$local_part_prefix\tenabled\t$sender_address\t$return_path\t$h_subject"
   seen mail
   subject "Enable disposable mail alias $1.$local_part"
   text "${lookup sqlite{DISP_ALIASES_DB \
@@ -120,6 +125,7 @@ then
 elif $3 is "off"
 then
   testprint "set '$1' counter off"
+  logwrite "$tod_log\t$local_part_prefix\tdisabled\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Disable disposable mail alias  $1.$local_part"
   text "${lookup sqlite{DISP_ALIASES_DB \
         insert or replace into counters \
@@ -132,6 +138,7 @@ then
 elif "${if match{$3}{[^0-9]}{nonnumeric}{numeric}}" is "numeric"
 then
   testprint "set '$1' counter $3"
+  logwrite "$tod_log\t$local_part_prefix\tset=$3\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Set disposable mail alias  $1.$local_part counter to $1"
   text "${lookup sqlite{DISP_ALIASES_DB \
         insert or replace into counters \
@@ -144,6 +151,7 @@ then
 elif $3 is "report"
 then
   testprint "report on '$1.$local_part'"
+  logwrite "$tod_log\t$local_part_prefix\treport\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Disposable mail report for $1.$local_part"
   text "${lookup sqlite{DISP_ALIASES_DB \
         select prefix, counter from counters \
@@ -157,6 +165,7 @@ then
  
 else
   testprint "unknown command: '$h_subject:'"
+  logwrite "$tod_log\t$local_part_prefix\tinvalid-command\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "unknown command"
   text "Unknown command:\n[$h_subject:]"
   finish

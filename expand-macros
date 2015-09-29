@@ -1,4 +1,7 @@
 #!/usr/bin/perl -p
 
-# Substitute all instances of DISP_ALIASES_DB with the first argument
-s{DISP_ALIASES_DB}{$ENV{DISP_ALIASES_DB}}g
+# Substitute all instances of the listed macros
+foreach my $macro (qw(DISP_ALIASES_DB DISP_ALIASES_LOGDIR DISP_ALIASES_FILTER)) {
+    s{\Q$macro\E}{$ENV{$macro}}g;
+}
+

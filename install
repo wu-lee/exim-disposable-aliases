@@ -13,6 +13,7 @@ HERE=$(dirname "$SCRIPT")
 EXIM=/etc/exim4
 USER=Debian-exim
 GROUP=Debian-exim
+LOGGROUP=adm
 WRITABLE=0750
 READABLE=0644
 
@@ -25,6 +26,7 @@ SQLITE=sqlite3
 
 export DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
 export DISP_ALIASES_FILTER=$EXIM/conf.d/disposable-aliases-filter
+export DISP_ALIASES_LOGDIR=/var/log/exim4/disposable-aliases
 
 if [[ "$FORCE" == "1" ]]; then
    rm -vf $DISP_ALIASES_DB
@@ -38,13 +40,18 @@ else
 fi
 
 chown $USER:$GROUP "$DISP_ALIASES_DB"
-chmod $WRITABLE "$DISP_ALIASES_DB" 
+chmod $WRITABLE "$DISP_ALIASES_DB"
+
+mkdir -vp "$DISP_ALIASES_LOGDIR"
+chown $USER:$LOGGROUP "$DISP_ALIASES_LOGDIR"
+chmod 0750 "$DISP_ALIASES_LOGDIR"
 
 cat >"$EXIM/conf.d/main/00_local-macros" <<EOF
 # This needs to be included before the routers
 
 DISP_ALIASES_DB = $DISP_ALIASES_DB
 DISP_ALIASES_FILTER = $DISP_ALIASES_FILTER
+DISP_ALIASES_LOGDIR = $DISP_ALIASES_LOGDIR
 EOF
 
 myinstall $READABLE "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
