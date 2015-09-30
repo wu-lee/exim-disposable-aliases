@@ -52,11 +52,11 @@ done
 
 function testexim() {
     local cmd=$(parse_addr 'exim -bfp %s -bfl %s -bfd %s -bf filter2' "$1")
-    $cmd
+    shift
+    $cmd $*
 }
 
 # We use 'read' here to guarantee an order
-email=gamma.pimpernel@bar
 while true; do
     read -r email || die unexpected end of data
     read -r subj  || die unexpected end of data
@@ -217,6 +217,62 @@ not a disposable mail candidate, skipping
 a.99999.pimpernel@bar
 test
 got a disposable mail candidate with 99999 deliveries remaining
+EOF
+
+
+# Test authentication checks
+# We use 'read' here to guarantee an order
+while true; do
+    read -r email || die unexpected end of data
+    read -r subj  || die unexpected end of data
+    read -r flags || die unexpected end of data
+    result=$(sed "s/Subject: .*/Subject: $subj/" <test1.email | testexim "$email" $flags)    
+    printf "%s $email: $subj\n" "$flags"
+    while true; do
+        # End testing if we see the end of data
+        read -r message || break 2
+        
+        # End this sequence of messages on blank line
+        [ -z "$message" ] && break
+
+        if printf "$result" | grep -q -Fe "$message"; then
+            echo "ok   - $message"
+        else
+            echo "fail - $message"
+            printf "$result\n" | sed 's/^/    /'
+            fails=$(($fails + 1))
+        fi
+    done
+done <<EOF
+alpha.pimpernel@bar
+!on
+-oMa 127.0.0.1 -oMaa dovecot_plain -f nick
+source looks authenticated, 'nick' '127.0.0.1' 'dovecot_plain'
+enable prefix 'alpha'
+
+alpha.pimpernel@bar
+!on
+-oMa 1.2.3.4 -oMaa dovecot_plain -f nick
+source looks authenticated, 'nick' '1.2.3.4' 'dovecot_plain'
+enable prefix 'alpha'
+
+alpha.pimpernel@bar
+!on
+-oMa 127.0.0.1 -f nick
+source looks authenticated, 'nick' '127.0.0.1' ''
+enable prefix 'alpha'
+
+alpha.pimpernel@bar
+!on
+-oMa 1.2.3.4 -f root
+source looks authenticated, 'root' '1.2.3.4' ''
+enable prefix 'alpha'
+
+alpha.pimpernel@bar
+!on
+-oMa 1.2.3.4 -f nick
+source doesn't look authenticated, 'nick' '1.2.3.4' ''
+deliver to 'percy'
 EOF
 
 echo "failed: $fails"
