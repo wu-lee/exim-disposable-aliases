@@ -48,11 +48,16 @@ if "$1 $2 $h_subject" matches "^([^ ]+) ([^ ]+) *[!] *([^ ]+)"
 then
   testprint "subject might be a control message: '$h_subject:'"
 
-  if $sender_address_local_part is "root" 
-     or $sender_host_address is "127.0.0.1"
-     or $sender_host_authenticated is not "" 
+  if ($sender_host_address is "" and $authenticated_id is "root")
+      or ($sender_host_authenticated is not ""
+          and "${lookup sqlite{DISP_ALIASES_DB \
+          select count(*) from authorised \
+  	  where stem = '${quote_sqlite:$local_part}' \
+	  and id = '${quote_sqlite:$authenticated_id}' \
+          and driver = '${quote_sqlite:$sender_host_authenticated}'}\
+	  {$value}{0}}" is above 0)
   then
-    testprint "source looks authenticated, '$sender_address_local_part' '$sender_host_address' '$sender_host_authenticated'"
+    testprint "source looks authenticated, id: '$authenticated_id' host: '$sender_host_address' auth driver: '$sender_host_authenticated'"
 
     # Identify the command, set n1 accordingly
     if $3 is "on" 
@@ -92,7 +97,7 @@ then
     endif
 
   else
-    testprint "source doesn't look authenticated, '$sender_address_local_part' '$sender_host_address' '$sender_host_authenticated'"
+    testprint "source doesn't look authenticated, id: '$authenticated_id' host: '$sender_host_address' auth driver: '$sender_host_authenticated'"
   endif
 endif
 

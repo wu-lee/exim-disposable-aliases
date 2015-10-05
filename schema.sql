@@ -16,3 +16,10 @@ CREATE TABLE counters (
    PRIMARY KEY (prefix, stem)
 );
 
+-- Indicates the authorisation ids required to control each stem
+CREATE TABLE authorised (
+   stem TEXT NOT NULL,
+   id TEXT NOT NULL,
+   driver TEXT NOT NULL,
+   PRIMARY KEY (stem, id, driver)
+);

@@ -12,6 +12,7 @@ rm -f "$db" &&
 sqlite3 "$db" <../schema.sql &&
 sqlite3 "$db" <<EOF || die failed to init $db
 insert into aliases (stem, recipients) values ('pimpernel', 'percy');
+insert into authorised (stem, id, driver) values ('pimpernel', 'nick', 'dovecot_plain');
 EOF
 
 
@@ -53,6 +54,7 @@ done
 function testexim() {
     local cmd=$(parse_addr 'exim -bfp %s -bfl %s -bfd %s -bf filter2' "$1")
     shift
+echo $cmd "$@" >&2
     $cmd $*
 }
 
@@ -60,7 +62,7 @@ function testexim() {
 while true; do
     read -r email || die unexpected end of data
     read -r subj  || die unexpected end of data
-    result=$(sed "s/Subject: .*/Subject: $subj/" <test1.email | testexim "$email")    
+    result=$(sed "s/Subject: .*/Subject: $subj/" <test1.email | testexim "$email"  -oMai root)
     printf "$email: $subj\n"
     while true; do
         # End testing if we see the end of data
@@ -246,33 +248,39 @@ while true; do
 done <<EOF
 alpha.pimpernel@bar
 !on
--oMa 127.0.0.1 -oMaa dovecot_plain -f nick
-source looks authenticated, 'nick' '127.0.0.1' 'dovecot_plain'
+-oMa 127.0.0.1 -oMaa dovecot_plain -oMai nick
+source looks authenticated, id: 'nick' host: '127.0.0.1' auth driver: 'dovecot_plain'
 enable prefix 'alpha'
 
 alpha.pimpernel@bar
 !on
--oMa 1.2.3.4 -oMaa dovecot_plain -f nick
-source looks authenticated, 'nick' '1.2.3.4' 'dovecot_plain'
+-oMa 1.2.3.4 -oMaa dovecot_plain -oMai nick
+source looks authenticated, id: 'nick' host: '1.2.3.4' auth driver: 'dovecot_plain'
 enable prefix 'alpha'
 
 alpha.pimpernel@bar
 !on
--oMa 127.0.0.1 -f nick
-source looks authenticated, 'nick' '127.0.0.1' ''
+-oMa 127.0.0.1 -oMai nick
+source doesn't look authenticated, id: 'nick' host: '127.0.0.1' auth driver: ''
+deliver to 'percy': remaining=-1
+
+alpha.pimpernel@bar
+!on
+-oMai root
+source looks authenticated, id: 'root' host: '' auth driver: ''
 enable prefix 'alpha'
 
 alpha.pimpernel@bar
 !on
--oMa 1.2.3.4 -f root
-source looks authenticated, 'root' '1.2.3.4' ''
-enable prefix 'alpha'
+-oMa 1.2.3.4 -oMai root
+source doesn't look authenticated, id: 'root' host: '1.2.3.4' auth driver: ''
+deliver to 'percy': remaining=-1
 
 alpha.pimpernel@bar
 !on
--oMa 1.2.3.4 -f nick
-source doesn't look authenticated, 'nick' '1.2.3.4' ''
-deliver to 'percy'
+-oMa 1.2.3.4 -oMai nick
+source doesn't look authenticated, id: 'nick' host: '1.2.3.4' auth driver: ''
+deliver to 'percy': remaining=-1
 EOF
 
 echo "failed: $fails"
