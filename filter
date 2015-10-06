@@ -49,13 +49,12 @@ then
   testprint "subject might be a control message: '$h_subject:'"
 
   if ($sender_host_address is "" and $authenticated_id is "root")
-      or ($sender_host_authenticated is not ""
-          and "${lookup sqlite{DISP_ALIASES_DB \
+      or ${lookup sqlite{DISP_ALIASES_DB \
           select count(*) from authorised \
   	  where stem = '${quote_sqlite:$local_part}' \
 	  and id = '${quote_sqlite:$authenticated_id}' \
           and driver = '${quote_sqlite:$sender_host_authenticated}'}\
-	  {$value}{0}}" is above 0)
+	  {$value}{0}}" is above 0
   then
     testprint "source looks authenticated, id: '$authenticated_id' host: '$sender_host_address' auth driver: '$sender_host_authenticated'"
 
