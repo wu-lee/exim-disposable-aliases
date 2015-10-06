@@ -2,18 +2,18 @@ Disposable aliases for Exim
 ===========================
 
 If you know the excellent free service offered by
-[Spam Gourmet](http://spamgourmet.org), this aims to offer something
+[Spamgourmet](http://spamgourmet.org), this aims to offer something
 similar: disposable email aliases convenient for for ad-hoc logins,
 that can auto-delete after a fixed number of deliveries to prevent
 spammers from harvesting the addresses for nafarious ends.
 
-[Exim](http://exim.org) is a mail transfer agent, AKA MTA AKA mail
-server software, written for Unix, commonly installed on
+[Exim](http://exim.org) is a mail transfer agent, *AKA* MTA, *AKA*
+mail server software, written for Unix, commonly installed on
 [Debian](http://debian.org).
 
 This project consists primarily of an Exim router configuration with
 an associated Exim filter script, which performs the logic by means of
-a lookup into a SQLite database file.
+a lookup into a [SQLite](http://sqlite.org) database file.
 
 Synopsis
 --------
@@ -25,7 +25,7 @@ server's domain like this:
 
     spammr.5.pimpernel@example.com
 
-On seeing a delivery to this alias, the server will allow it and
+On seeing a delivery to this alias, your mail server will allow it and
 permit 4 more, after which they are rejected. If the site turns out to
 be responsible, you can enable the alias permanently. If the site
 abuses your this email, you can allow it to expire, or disable it!
@@ -33,14 +33,14 @@ abuses your this email, you can allow it to expire, or disable it!
 Description
 -----------
 
-The aliases handled by this filter emulate Spam Gourmet's, having the
+The aliases handled by this filter emulate Spamgourmet's, having the
 form:
 
-    `<prefix>.<N>.<stem>@<domain>`
+    <prefix>.<N>.<stem>@<domain>
 
 or: 
 
-    `<prefix>.<stem>@<domain>`
+    <prefix>.<stem>@<domain>
 
 Where:
 
@@ -276,5 +276,5 @@ doubt be improved.
 Author
 ------
 
-<Nick Stokoe> github.wu-lee@noodlefactory.co.uk
+Nick Stokoe - github dot wu-lee at noodlefactory dot co dot uk
 October 2015
