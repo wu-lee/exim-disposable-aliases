@@ -151,20 +151,20 @@ no more mail permitted to alpha.pimpernel: remaining=0
 alpha.pimpernel@bar
 !report 
 All *.pimpernel alias deliveries remaining:
-prefix=alpha remaining=0 delivered=4 dropped=6 
-prefix=beta remaining=0 delivered=0 dropped=1 
+prefix=alpha remaining=0 delivered=4 rejected=6 
+prefix=beta remaining=0 delivered=0 rejected=1 
 
 foo.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha remaining=0 delivered=4 dropped=6 
-prefix=beta remaining=0 delivered=0 dropped=1 
+prefix=alpha remaining=0 delivered=4 rejected=6 
+prefix=beta remaining=0 delivered=0 rejected=1 
 
 ?.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha remaining=0 delivered=4 dropped=6 
-prefix=beta remaining=0 delivered=0 dropped=1 
+prefix=alpha remaining=0 delivered=4 rejected=6 
+prefix=beta remaining=0 delivered=0 rejected=1 
 
 foo.3.pimpernel@bar
 test
@@ -181,16 +181,16 @@ deliver to 'percy': remaining=1
 foo.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha remaining=0 delivered=4 dropped=6 
-prefix=beta remaining=0 delivered=0 dropped=1 
-prefix=foo remaining=0 delivered=3 dropped=0 
+prefix=alpha remaining=0 delivered=4 rejected=6 
+prefix=beta remaining=0 delivered=0 rejected=1 
+prefix=foo remaining=0 delivered=3 rejected=0 
 
 ?.pimpernel@bar
 !report
 All *.pimpernel alias deliveries remaining:
-prefix=alpha remaining=0 delivered=4 dropped=6 
-prefix=beta remaining=0 delivered=0 dropped=1 
-prefix=foo remaining=0 delivered=3 dropped=0 
+prefix=alpha remaining=0 delivered=4 rejected=6 
+prefix=beta remaining=0 delivered=0 rejected=1 
+prefix=foo remaining=0 delivered=3 rejected=0 
 
 ..pimpernel@bar
 test

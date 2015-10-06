@@ -12,7 +12,7 @@ CREATE TABLE counters (
    stem TEXT NOT NULL,
    remaining INTEGER NOT NULL DEFAULT 0,
    delivered INTEGER NOT NULL DEFAULT 0,
-   dropped INTEGER NOT NULL DEFAULT 0,
+   rejected INTEGER NOT NULL DEFAULT 0,
    PRIMARY KEY (prefix, stem)
 );
 

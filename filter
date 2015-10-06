@@ -78,7 +78,7 @@ then
       logwrite "$tod_log\t$local_part_prefix\treport\t$sender_address\t$return_path\t$h_subject"
       seen mail subject "Disposable mail report for *.$local_part@$domain"
       text "${lookup sqlite{DISP_ALIASES_DB \
-	    select prefix, remaining, delivered, dropped from counters \
+	    select prefix, remaining, delivered, rejected from counters \
 	    where stem = '${quote_sqlite:$local_part}' \
 	    order by prefix} \
 	    {All *.$local_part alias deliveries remaining:\n\
@@ -177,18 +177,18 @@ then
 
   else
     testprint "no more mail permitted to $1.$local_part: remaining=$n2"
-    logwrite "$tod_log\t$local_part_prefix\tdropped\t$sender_address\t$return_path\t$h_subject"
+    logwrite "$tod_log\t$local_part_prefix\trejected\t$sender_address\t$return_path\t$h_subject"
 
     # Increment stats.  Condition is for side-effects only.
     if "${lookup sqlite{DISP_ALIASES_DB \
-	  update counters set dropped = dropped + 1 \
+	  update counters set rejected = rejected + 1 \
 	  where prefix='${quote_sqlite:$1}' \
 	  and stem='${quote_sqlite:$local_part}'}\
 	  {1}{1}}" is "0"
     then
     endif
 
-    seen finish
+    finish
   endif
 
 elif $n1 is 1
