@@ -160,7 +160,7 @@ then
   if $n2 is not 0
   then
     testprint "deliver to '$2': remaining=$n2"
-    logwrite "$tod_log\t$local_part_prefix\tdelivered=$n2\t$sender_address\t$return_path\t$h_subject"
+    logwrite "$tod_log\t$local_part_prefix\tremaining=$n2\t$sender_address\t$return_path\t$h_subject"
 
     # Increment stats.  Condition is for side-effects only.
     if "${lookup sqlite{DISP_ALIASES_DB \
