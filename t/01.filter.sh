@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# This test suite needs to be run with exim on the path,
+# and with the appropriate privileges for it to execute the
+# tests (which may mean root).  However, it should be safe and
+# will not send any mail.
+
 fails=0
 
 function die() {
