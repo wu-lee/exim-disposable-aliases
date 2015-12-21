@@ -27,7 +27,7 @@ testprint "got a disposable mail candidate with \
 # in a somewhat nasty way forced upon us by exim's lack of
 # proper variables.
 if "${lookup sqlite{DISP_ALIASES_DB \
-  select coalesce(group_concat(recipients), '') from aliases \
+  select coalesce(group_concat(recipients, ','), '') from aliases \
   where stem = '${quote_sqlite:$local_part}'} \
   {$1 $value}{}}" does not match "(.*) (.*[[:graph:]].*)"
 then
