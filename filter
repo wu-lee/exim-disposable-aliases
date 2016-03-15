@@ -171,7 +171,28 @@ then
     then
     endif
 
-    seen deliver $2
+    # Extract up to 10 email addresses, delimited by commas, from $2
+    # Currently I don't know of a way to do an arbitrary number.
+    seen deliver ${extract{1}{,}{$2}{$value}}
+    if "${extract{2}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{2}{,}{$2}{$value}}
+    if "${extract{3}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{3}{,}{$2}{$value}}
+    if "${extract{4}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{4}{,}{$2}{$value}}
+    if "${extract{5}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{5}{,}{$2}{$value}}
+    if "${extract{6}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{6}{,}{$2}{$value}}
+    if "${extract{7}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{7}{,}{$2}{$value}}
+    if "${extract{8}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{8}{,}{$2}{$value}}
+    if "${extract{9}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{9}{,}{$2}{$value}}
+    if "${extract{10}{,}{$2}{$value}{,}}" is "," then finish endif
+    seen deliver ${extract{10}{,}{$2}{$value}}
+
     finish
 
   else
