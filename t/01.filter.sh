@@ -16,7 +16,7 @@ db=sqlite.db
 rm -f "$db" &&
 sqlite3 "$db" <../schema.sql &&
 sqlite3 "$db" <<EOF || die failed to init $db
-insert into aliases (stem, recipients) values ('pimpernel', 'percy');
+insert into aliases (stem, recipients) values ('pimpernel', 'percy'), ('double', 'alice'), ('double', 'bob'), ('double', 'carol'), ('double', 'dave@example.com');
 insert into authorised (stem, id, driver) values ('pimpernel', 'nick', 'dovecot_plain');
 EOF
 
@@ -224,6 +224,19 @@ not a disposable mail candidate, skipping
 a.99999.pimpernel@bar
 test
 got a disposable mail candidate with 99999 deliveries remaining
+
+uno.double@bar
+!on
+got a known alias 'double' for 'alice,bob,carol,dave@example.com' prefix 'uno'
+enable prefix 'uno'
+
+uno.double@bar
+test
+got a known alias 'double' for 'alice,bob,carol,dave@example.com' prefix 'uno'
+Deliver message to: alice@
+Deliver message to: bob@
+Deliver message to: carol@
+Deliver message to: dave@example.com
 EOF
 
 
