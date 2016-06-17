@@ -6,6 +6,13 @@ CREATE TABLE aliases (
    PRIMARY KEY (stem, recipients)
 );
 
+-- Per stem configs
+CREATE TABLE stem_configs (
+   stem TEXT NOT NULL,
+   default_remaining INTEGER NOT NULL DEFAULT 0,
+   PRIMARY KEY (stem)
+);
+
 -- Maps prefix+stems to zero or one counter
 CREATE TABLE counters (
    prefix TEXT NOT NULL,
