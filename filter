@@ -1,11 +1,11 @@
 # Exim filter
 
 # Special variables in this file:
-# n0/$2 is the counter in the local part prefix, if any.
+# n0/$3 is the counter in the local part prefix, if any.
 # n1 idenifies the control command type, or is 0 if not one.
 # n2 is the remaining deliveries counter (from the db if present, else the prefix)
 # $1 is the alias's prefix ID.
-# $3 is the actual control command extracted from the subject.
+# $3 (on second capture) is the actual control command extracted from the subject.
 
 # This match also captures the alias's prefix in $1, and the counter
 # in $3.  $local_part retains the alias stem.
@@ -15,9 +15,18 @@ then
   finish
 endif
 
-# Sanitize the email counter into a number in n0
+# Sanitize the email counter into a number in n0, which indicates the default remaining
+# counter to use if this is the first email seen to this alias.  If there was no counter
+# $3 will be ''. 
 # After this we don't need $3
-add ${eval10:0$3} to n0
+if "$3" is ""
+then
+  # Use the default remaining counter (-1 -> no limit; modify this to change the default remaining)
+  add -1 to n0
+else
+  # Use the number
+  add $3 to n0
+endif
 
 testprint "got a disposable mail candidate with \
  ${if >{${strlen:$3}}{0}{$n0}{no}} deliveries remaining"
