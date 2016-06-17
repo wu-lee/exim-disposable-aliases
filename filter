@@ -33,7 +33,7 @@ else
   testprint "Using email infix counter $n0"
 endif
 
-testprint "got a disposable mail candidate with \
+testprint "got a disposable mail candidate infixed with \
  ${if >{${strlen:$3}}{0}{$n0}{no}} deliveries remaining"
 
 # Is $local_part an existing alias, i.e. does $local_part match a defined alias?

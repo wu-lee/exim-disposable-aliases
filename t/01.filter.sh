@@ -16,8 +16,9 @@ db=sqlite.db
 rm -f "$db" &&
 sqlite3 "$db" <../schema.sql &&
 sqlite3 "$db" <<EOF || die failed to init $db
-insert into aliases (stem, recipients) values ('pimpernel', 'percy'), ('double', 'alice'), ('double', 'bob'), ('double', 'carol'), ('double', 'dave@example.com');
+insert into aliases (stem, recipients) values ('pimpernel', 'percy'), ('double', 'alice'), ('double', 'bob'), ('double', 'carol'), ('double', 'dave@example.com'), ('defaulton', 'percy');
 insert into authorised (stem, id, driver) values ('pimpernel', 'nick', 'dovecot_plain');
+insert into stem_configs (stem, default_remaining) values ('defaulton', -1);
 EOF
 
 
@@ -91,11 +92,11 @@ not a disposable mail candidate
 
 foo.zoo@bar
 test 
-got a disposable mail candidate with no deliveries remaining
+got a disposable mail candidate infixed with no deliveries remaining
 
 foo.2.zoo@bar
 test 
-got a disposable mail candidate with 2 deliveries remaining
+got a disposable mail candidate infixed with 2 deliveries remaining
 
 alpha.pimpernel@bar
 test 
@@ -223,7 +224,7 @@ not a disposable mail candidate, skipping
 
 a.99999.pimpernel@bar
 test
-got a disposable mail candidate with 99999 deliveries remaining
+got a disposable mail candidate infixed with 99999 deliveries remaining
 
 uno.double@bar
 !on
@@ -237,6 +238,34 @@ Deliver message to: alice@
 Deliver message to: bob@
 Deliver message to: carol@
 Deliver message to: dave@example.com
+
+alpha.defaulton@bar
+first email
+No email infix counter, using configured default_remaining counter -1
+got a disposable mail candidate infixed with no deliveries remaining
+got a known alias 'defaulton' for 'percy' prefix 'alpha'
+deliver to 'percy': remaining=-1
+
+alpha.5.defaulton@bar
+second email
+Using email infix counter 5
+got a disposable mail candidate infixed with 5 deliveries remaining
+got a known alias 'defaulton' for 'percy' prefix 'alpha'
+deliver to 'percy': remaining=-1
+
+alpha.defaulton@bar
+third email
+No email infix counter, using configured default_remaining counter -1
+got a disposable mail candidate infixed with no deliveries remaining
+got a known alias 'defaulton' for 'percy' prefix 'alpha'
+deliver to 'percy': remaining=-1
+
+beta.5.defaulton@bar
+first email
+Using email infix counter 5
+got a disposable mail candidate infixed with 5 deliveries remaining
+got a known alias 'defaulton' for 'percy' prefix 'beta'
+deliver to 'percy': remaining=5
 EOF
 
 
