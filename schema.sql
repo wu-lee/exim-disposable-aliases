@@ -1,3 +1,11 @@
+-- See the default config value schema_version for this schema's version.
+
+-- Global config / metadata
+CREATE TABLE config (
+   name STRING NOT NULL,
+   value STRING NOT NULL,
+   PRIMARY KEY (name)
+);
 
 -- Maps stems to one or more recipients
 CREATE TABLE aliases (
@@ -30,3 +38,9 @@ CREATE TABLE authorised (
    driver TEXT NOT NULL,
    PRIMARY KEY (stem, id, driver)
 );
+
+-- Set the default config values
+INSERT INTO config (name, value)
+VALUES
+   ("schema_version","1")
+;
