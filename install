@@ -27,6 +27,7 @@ SQLITE=sqlite3
 export DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
 export DISP_ALIASES_FILTER=$EXIM/conf.d/disposable-aliases-filter
 export DISP_ALIASES_LOGDIR=/var/log/exim4/disposable-aliases
+export DISP_ALIASES_DATA_ACL=$EXIM/conf.d/disposable-aliases-data-acl
 
 if [[ "$FORCE" == "1" ]]; then
    rm -vf $DISP_ALIASES_DB
@@ -52,6 +53,7 @@ cat >"$EXIM/conf.d/main/00_local-macros" <<EOF
 DISP_ALIASES_DB = $DISP_ALIASES_DB
 DISP_ALIASES_FILTER = $DISP_ALIASES_FILTER
 DISP_ALIASES_LOGDIR = $DISP_ALIASES_LOGDIR
+CHECK_DATA_LOCAL_ACL_FILE = $DISP_ALIASES_DATA_ACL
 EOF
 
 myinstall $READABLE "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_aliases"
@@ -59,5 +61,6 @@ myinstall $READABLE "$HERE/router" "$EXIM/conf.d/router/450_local-disposable_ali
 ./expand-macros <"$HERE/filter" >"$HERE/filter2"
 myinstall $READABLE "$HERE/filter2" "$DISP_ALIASES_FILTER"
 
+myinstall $READABLE "$HERE/data-acl" "$DISP_ALIASES_DATA_ACL"
 
 service exim4 restart

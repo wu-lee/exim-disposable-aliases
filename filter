@@ -136,7 +136,8 @@ add "${lookup sqlite{DISP_ALIASES_DB \
 # appropriate counter record exists, meaning we can subsequently just
 # do simple updates.
 # Condition is for side-effects only.  
-if "${lookup sqlite{DISP_ALIASES_DB \
+if $acl_m_disposable_aliases_delivering is not ""
+and "${lookup sqlite{DISP_ALIASES_DB \
     insert or rollback into counters \
     (prefix, stem) values \
     ('${quote_sqlite:$1}', \
@@ -161,7 +162,8 @@ then
   # -n         0         0              0
   #  0         0         0              0
   #  n        -1         n              1
-  if "${lookup sqlite{DISP_ALIASES_DB \
+  if $acl_m_disposable_aliases_delivering is not ""
+  and "${lookup sqlite{DISP_ALIASES_DB \
 	update counters set \
 	remaining = $n2 - min(max($n2, 0), 1) \
 	where prefix = '${quote_sqlite:$1}' \
@@ -177,7 +179,8 @@ then
     logwrite "$tod_log\t$local_part_prefix\tremaining=$n2\t$sender_address\t$return_path\t$h_subject"
 
     # Increment stats.  Condition is for side-effects only.
-    if "${lookup sqlite{DISP_ALIASES_DB \
+    if $acl_m_disposable_aliases_delivering is not ""
+    and "${lookup sqlite{DISP_ALIASES_DB \
 	  update counters set delivered = delivered + 1 \
 	  where prefix='${quote_sqlite:$1}' \
 	  and stem='${quote_sqlite:$local_part}'}\
@@ -214,7 +217,8 @@ then
     logwrite "$tod_log\t$local_part_prefix\trejected\t$sender_address\t$return_path\t$h_subject"
 
     # Increment stats.  Condition is for side-effects only.
-    if "${lookup sqlite{DISP_ALIASES_DB \
+    if $acl_m_disposable_aliases_delivering is not ""
+    and "${lookup sqlite{DISP_ALIASES_DB \
 	  update counters set rejected = rejected + 1 \
 	  where prefix='${quote_sqlite:$1}' \
 	  and stem='${quote_sqlite:$local_part}'}\
@@ -232,12 +236,12 @@ then
   logwrite "$tod_log\t$local_part_prefix\tenabled\t$sender_address\t$return_path\t$h_subject"
   seen mail
   subject "Enabled disposable mail alias $1.$local_part@domain"
-  text "${lookup sqlite{DISP_ALIASES_DB \
+  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{DISP_ALIASES_DB \
 	update counters set \
 	remaining = -1 \
 	where prefix = '${quote_sqlite:$1}' \
 	and stem = '${quote_sqlite:$local_part}'} \
-	{}{}} \
+	{}{}}}{}} \
 	Enabled $1.$local_part@$domain."
   finish
 
@@ -247,12 +251,12 @@ then
 
   logwrite "$tod_log\t$local_part_prefix\tdisabled\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Disabled disposable mail alias $1.$local_part@$domain"
-  text "${lookup sqlite{DISP_ALIASES_DB \
+  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{DISP_ALIASES_DB \
 	update counters set \
 	remaining = 0 \
 	where prefix = '${quote_sqlite:$1}' \
 	and stem = '${quote_sqlite:$local_part}'} \
-	{}{}} \
+	{}{}}}{}} \
 	Disabled $1.$local_part@$domain."
   finish
 
@@ -262,12 +266,12 @@ then
 
   logwrite "$tod_log\t$local_part_prefix\tset=$3\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Allow $3 more deliveries to $1.$local_part@$domain"
-  text "${lookup sqlite{DISP_ALIASES_DB \
+  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{DISP_ALIASES_DB \
 	update counters set \
 	remaining = $3 \
 	where prefix = '${quote_sqlite:$1}' \
 	and stem = '${quote_sqlite:$local_part}'} \
-	{}{}} \
+	{}{}}}{}} \
 	Allow $3 more deliveries to $1.$local_part@$domain."
   finish
 

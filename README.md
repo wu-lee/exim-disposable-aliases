@@ -118,6 +118,7 @@ The installer script creates:
  - A filter
  - A SQLite database
  - An Exim macro definition fragment
+ - An Exim data ACL fragment
 
 When in use, the filter also generates log files in a common directory.
 
