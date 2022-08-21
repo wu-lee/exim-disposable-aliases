@@ -94,6 +94,10 @@ DISP_ALIASES_FILTER = $DISP_ALIASES_FILTER
 DISP_ALIASES_LOGDIR = $DISP_ALIASES_LOGDIR
 CHECK_DATA_LOCAL_ACL_FILE = $DISP_ALIASES_DATA_ACL
 
+# For now set the sqlite file globally - Exim v4.90 does not yet support per-lookup file specs.
+# Will find a workaround for this later.
+sqlite_dbfile = DISP_ALIASES_DB
+
 EOF
 
     mkdir -p "$BUILDDIR${DISP_ALIASES_LOGROTATE_CONF%/*}"

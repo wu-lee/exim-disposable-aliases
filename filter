@@ -22,7 +22,7 @@ endif
 if "$3" is ""
 then
   # Use the default_remaining config (-1 -> no limit; modify this to change the default remaining)
-  add "${lookup sqlite{DISP_ALIASES_DB \
+  add "${lookup sqlite{ \
     select default_remaining from stem_configs \
     where stem = '${quote_sqlite:$local_part}'} \
     {$value}{0}}" to n0
@@ -40,7 +40,7 @@ testprint "got a disposable mail candidate infixed with \
 # This match also captures the alias, if known, in $2, whilst preserving $1
 # in a somewhat nasty way forced upon us by exim's lack of
 # proper variables.
-if "${lookup sqlite{DISP_ALIASES_DB \
+if "${lookup sqlite{ \
   select coalesce(group_concat(recipients, ','), '') from aliases \
   where stem = '${quote_sqlite:$local_part}'} \
   {$1 $value}{}}" does not match "(.*) (.*[[:graph:]].*)"
@@ -63,7 +63,7 @@ then
   testprint "subject might be a control message: '$h_subject:'"
 
   if ($sender_host_address is "" and $authenticated_id is "root")
-      or "${lookup sqlite{DISP_ALIASES_DB \
+      or "${lookup sqlite{ \
           select count(*) from authorised \
   	  where stem = '${quote_sqlite:$local_part}' \
 	  and id = '${quote_sqlite:$authenticated_id}' \
@@ -88,9 +88,9 @@ then
     elif $3 is "report"
     then
       testprint "This is a report command on '$1.$local_part'"
-      logwrite "$tod_log\t$local_part_prefix\treport\t$sender_address\t$return_path\t$h_subject"
+      logwrite "$tod_log\t$local_part_prefix$local_part\treport\t$sender_address\t$return_path\t$h_subject"
       seen mail subject "Disposable mail report for *.$local_part@$domain"
-      text "${lookup sqlite{DISP_ALIASES_DB \
+      text "${lookup sqlite{ \
 	    select prefix, remaining, delivered, rejected from counters \
 	    where stem = '${quote_sqlite:$local_part}' \
 	    order by prefix} \
@@ -103,7 +103,7 @@ then
 
     else # unknown
       testprint "unknown command: '$h_subject:'"
-      logwrite "$tod_log\t$local_part_prefix\tinvalid-command\t$sender_address\t$return_path\t$h_subject"
+      logwrite "$tod_log\t$local_part_prefix$local_part\tinvalid-command\t$sender_address\t$return_path\t$h_subject"
       seen mail subject "unknown command"
       text "Unknown command:\n[$h_subject:]"
       finish
@@ -124,7 +124,7 @@ endif
 # from the email, which is handled above and should be guaranteed a
 # positive integer or zero. Note this needs to be done before we
 # insert a record.
-add "${lookup sqlite{DISP_ALIASES_DB \
+add "${lookup sqlite{ \
   select remaining from counters \
   where prefix = '${quote_sqlite:$1}' \
   and stem = '${quote_sqlite:$local_part}'} \
@@ -137,7 +137,7 @@ add "${lookup sqlite{DISP_ALIASES_DB \
 # do simple updates.
 # Condition is for side-effects only.  
 if $acl_m_disposable_aliases_delivering is not ""
-and "${lookup sqlite{DISP_ALIASES_DB \
+and "${lookup sqlite{ \
     insert or rollback into counters \
     (prefix, stem) values \
     ('${quote_sqlite:$1}', \
@@ -163,7 +163,7 @@ then
   #  0         0         0              0
   #  n        -1         n              1
   if $acl_m_disposable_aliases_delivering is not ""
-  and "${lookup sqlite{DISP_ALIASES_DB \
+  and "${lookup sqlite{ \
 	update counters set \
 	remaining = $n2 - min(max($n2, 0), 1) \
 	where prefix = '${quote_sqlite:$1}' \
@@ -176,11 +176,11 @@ then
   if $n2 is not 0
   then
     testprint "deliver to '$2': remaining=$n2"
-    logwrite "$tod_log\t$local_part_prefix\tremaining=$n2\t$sender_address\t$return_path\t$h_subject"
+    logwrite "$tod_log\t$local_part_prefix$local_part\tremaining=$n2\t$sender_address\t$return_path\t$h_subject"
 
     # Increment stats.  Condition is for side-effects only.
     if $acl_m_disposable_aliases_delivering is not ""
-    and "${lookup sqlite{DISP_ALIASES_DB \
+    and "${lookup sqlite{ \
 	  update counters set delivered = delivered + 1 \
 	  where prefix='${quote_sqlite:$1}' \
 	  and stem='${quote_sqlite:$local_part}'}\
@@ -214,11 +214,11 @@ then
 
   else
     testprint "no more mail permitted to $1.$local_part: remaining=$n2"
-    logwrite "$tod_log\t$local_part_prefix\trejected\t$sender_address\t$return_path\t$h_subject"
+    logwrite "$tod_log\t$local_part_prefix$local_part\trejected\t$sender_address\t$return_path\t$h_subject"
 
     # Increment stats.  Condition is for side-effects only.
     if $acl_m_disposable_aliases_delivering is not ""
-    and "${lookup sqlite{DISP_ALIASES_DB \
+    and "${lookup sqlite{ \
 	  update counters set rejected = rejected + 1 \
 	  where prefix='${quote_sqlite:$1}' \
 	  and stem='${quote_sqlite:$local_part}'}\
@@ -233,10 +233,10 @@ elif $n1 is 1
 then
   testprint "enable prefix '$1'"
 
-  logwrite "$tod_log\t$local_part_prefix\tenabled\t$sender_address\t$return_path\t$h_subject"
+  logwrite "$tod_log\t$local_part_prefix$local_part\tenabled\t$sender_address\t$return_path\t$h_subject"
   seen mail
   subject "Enabled disposable mail alias $1.$local_part@domain"
-  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{DISP_ALIASES_DB \
+  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{ \
 	update counters set \
 	remaining = -1 \
 	where prefix = '${quote_sqlite:$1}' \
@@ -249,9 +249,9 @@ elif $n1 is 2
 then
   testprint "disable prefix '$1'"
 
-  logwrite "$tod_log\t$local_part_prefix\tdisabled\t$sender_address\t$return_path\t$h_subject"
+  logwrite "$tod_log\t$local_part_prefix$local_part\tdisabled\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Disabled disposable mail alias $1.$local_part@$domain"
-  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{DISP_ALIASES_DB \
+  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{ \
 	update counters set \
 	remaining = 0 \
 	where prefix = '${quote_sqlite:$1}' \
@@ -264,9 +264,9 @@ elif $n1 is 3
 then
   testprint "allow $3 more to prefix '$1'"
 
-  logwrite "$tod_log\t$local_part_prefix\tset=$3\t$sender_address\t$return_path\t$h_subject"
+  logwrite "$tod_log\t$local_part_prefix$local_part\tset=$3\t$sender_address\t$return_path\t$h_subject"
   seen mail subject "Allow $3 more deliveries to $1.$local_part@$domain"
-  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{DISP_ALIASES_DB \
+  text "${if def:acl_m_disposable_aliases_delivering{${lookup sqlite{ \
 	update counters set \
 	remaining = $3 \
 	where prefix = '${quote_sqlite:$1}' \
