@@ -17,7 +17,7 @@ to a router config plus a filter (because system filters cannot
 actually be used in routers).
 
 I was keen to avoid too many dependencies or convoutions like Perl or
-procmail or maildrop, or anything low level hard to debug, like
+procmail or maildrop, or anything low level and hard to debug, like
 dynamically-linked C.  This is not to say I don't like Perl or
 procmail or maildrop, they just seemed overkill, and the SQLite
 integration not directly supported as it is in Exim.
