@@ -1,0 +1,198 @@
+#!/bin/bash
+
+# Builds a Debian package
+# Requirements: bash, findutils, gzip
+
+# Enable failure on command or piped command failures
+set -o errexit
+set -o pipefail
+
+function die() {
+    echo $* >&2
+    exit 1
+}
+
+# The name of the package to build
+PKG=exim4-disposable-aliases
+
+SCRIPT=$(readlink -f ${BASH_SOURCE[0]})
+HERE=$(dirname "$SCRIPT")
+EXIM=${EXIM:-/etc/exim4}
+EXIMUSER=${EXIMUSER:-Debian-exim}
+EXIMGROUP=${EXIMGROUP:-Debian-exim}
+LOGGROUP=${LOGGROUP:-adm}
+WRITABLE=${WRITABLE:-0750}
+READABLE=${READABLE:-0644}
+
+{ # Parse and validate the command options
+    while getopts ":b:d" option; do
+        case $option in
+	    # -b defines a staging directory in which the files are installed.
+	    # This directory must exist.
+            b) BASEDIR="$OPTARG" ;;
+	    d) DEBUG=1 ;;
+	    *) 
+		echo "Invalid option: $OPTARG"
+		exit 1
+		;;
+	esac
+    done
+    shift $(( $OPTIND - 1 ))
+}
+
+# Sanity checks
+[[ -n "$BASEDIR" ]] || die "Base directory set to a non-directory: $BASEDIR"
+[[ "$READABLE" == 0+([0-9]) ]] || die "READABLE must be a valid numeric file permission mode"
+[[ "$WRITABLE" == 0+([0-9]) ]] || die "WRITABLE must be a valid numeric file permission mode"
+
+# Enable debugging?
+if [[ -n "$DEBUG" ]]; then
+    printenv
+    set -vx
+fi
+
+function myinstall() {
+    install -m $1 "$2" "$3"
+}
+
+# Temporary build directory
+BUILDDIR="$BASEDIR/build"
+
+# The sqlite3 binary on the target system
+SQLITE=/usr/bin/sqlite3
+
+export DISP_ALIASES_DB=/var/spool/exim4/db/disposable-aliases.db
+export DISP_ALIASES_FILTER="$EXIM/conf.d/disposable-aliases-filter"
+export DISP_ALIASES_LOGDIR=/var/log/exim4/disposable-aliases
+export DISP_ALIASES_LOGROTATE_CONF="/etc/logrotate.d/$PKG"
+export DISP_ALIASES_DATA_ACL="$EXIM/conf.d/disposable-aliases-data-acl"
+export DISP_ALIASES_MACROS="$EXIM/conf.d/main/00_disposable-aliases-macros"
+export DISP_ALIASES_ROUTER="$EXIM/conf.d/router/450_disposable_aliases"
+
+{ # Install package files
+    # Remove and re-create the build directory
+    rm -rf "$BUILDDIR"
+    mkdir "$BUILDDIR"
+    
+    if [[ -n "$BUILDDIR" ]]; then
+	# Ensure the target directories exist if we're not installing to the root filesystem
+	mkdir -pv "$BUILDDIR${DISP_ALIASES_DB%/*}"
+	mkdir -pv "$BUILDDIR${DISP_ALIASES_FILTER%/*}"
+	mkdir -pv "$BUILDDIR${DISP_ALIASES_MACROS%/*}"
+	mkdir -pv "$BUILDDIR${DISP_ALIASES_ROUTER%/*}"
+    fi    
+    
+    mkdir -vp "$BUILDDIR$DISP_ALIASES_LOGDIR"
+    
+    chmod $WRITABLE "$BUILDDIR$DISP_ALIASES_LOGDIR"
+    
+    cat >"$BUILDDIR$DISP_ALIASES_MACROS" <<EOF
+# This needs to be included before the routers
+
+DISP_ALIASES_DB = $DISP_ALIASES_DB
+DISP_ALIASES_FILTER = $DISP_ALIASES_FILTER
+DISP_ALIASES_LOGDIR = $DISP_ALIASES_LOGDIR
+CHECK_DATA_LOCAL_ACL_FILE = $DISP_ALIASES_DATA_ACL
+
+EOF
+
+    mkdir -p "$BUILDDIR${DISP_ALIASES_LOGROTATE_CONF%/*}"
+    cat >"$BUILDDIR$DISP_ALIASES_LOGROTATE_CONF" <<EOF
+$DISP_ALIASES_LOGDIR/*.log {
+    rotate 12
+    weekly
+    compress
+    missingok
+}
+EOF
+
+    myinstall $READABLE "$HERE/router" "$BUILDDIR$DISP_ALIASES_ROUTER"
+
+    ./expand-macros <"$HERE/filter" >"$BASEDIR/filter.tmp"
+    myinstall $READABLE "$BASEDIR/filter.tmp" "$BUILDDIR/$DISP_ALIASES_FILTER"
+    rm "$BASEDIR/filter.tmp"
+
+    myinstall $READABLE "$HERE/data-acl" "$BUILDDIR/$DISP_ALIASES_DATA_ACL"
+
+    DOCS="$BUILDDIR/usr/share/doc/$PKG"
+    mkdir -p "$DOCS"    
+
+    CHANGELOG="$DOCS/changelog.gz"
+    gzip -n --best <"$HERE/ChangeLog" >"$CHANGELOG"
+
+    cp "$HERE/COPYRIGHT" "$DOCS/copyright"
+
+    cp "$HERE/README.md" "$DOCS"
+
+    cp "$HERE/schema.sql" "$DOCS"
+
+    # Ensure there aren't any crazy modes in $BUILDDIR
+    find $BUILDDIR -type f -exec chmod 0644 \{} \;
+    find $BUILDDIR -type d -exec chmod 0755 \{} \;
+}
+
+{
+    # Create debian package files
+    mkdir "$BUILDDIR/DEBIAN"
+    cat >"$BUILDDIR/DEBIAN/control" <<EOF
+Package: exim4-disposable-aliases
+Version: $(<./version)
+Section: mail
+Priority: optional
+Architecture: all
+Maintainer: Nick Stokoe <exim4-disposable-aliases.wu-lee@noodlefactory.co.uk>
+Homepage: https://github.com/wu-lee/exim4-disposable-aliases
+Build-Depends: debhelper (>=9), perl
+Depends: exim4-daemon-heavy (>= 4.94), sqlite3
+Description: Disposable email address aliases for Exim4
+ Inspired by Spamgourmet, this project consists primarily of an Exim
+ router configuration with an associated Exim filter script, which
+ performs the logic by means of a lookup into a SQLite database file.
+ Dependencies are intentionally minimal.
+EOF
+
+    (cd $BUILDDIR; find etc/ -type f -printf "/%p\n" >"DEBIAN/conffiles")
+
+    cat >$BUILDDIR/DEBIAN/postinst <<EOF
+#!/bin/sh
+set -e
+if [ ! -e "$DISP_ALIASES_DB" ]; then
+    # Initialise the database
+    "$SQLITE" "$DISP_ALIASES_DB" <"/usr/share/doc/$PKG/schema.sql"
+    chmod $WRITABLE "$DISP_ALIASES_DB"
+else
+    # Upgrade steps would go here. None currently as there is only one schema!
+    echo
+fi
+
+# Allow exim access to the database and log directoy
+chown "$EXIMUSER:$EXIMGROUP" "$DISP_ALIASES_DB"
+chown "$EXIMUSER:$LOGGROUP" "$DISP_ALIASES_LOGDIR"
+
+# Rebuild exim config (if update-exim4.conf in path)
+[ -n `type -p update-exim4.conf` ] && update-exim4.conf
+
+# Restart exim daemon
+service exim4 reload
+EOF
+    
+    cat >$BUILDDIR/DEBIAN/postrm <<EOF
+#!/bin/sh
+set -e
+if [ "\$1" = "purge" ]; then
+    rm -f "$DISP_ALIASES_DB"
+    rm -rf "$DISP_ALIASES_LOGDIR"
+fi
+
+# Restart exim daemon
+service exim4 reload
+EOF
+
+    chmod +x "$BUILDDIR/DEBIAN/"{postrm,postinst}
+}
+
+# Build the archive
+dpkg-deb --root-owner-group --build "$BUILDDIR" "$BASEDIR/$PKG.deb"
+
+# Check the archive
+lintian "$BASEDIR/$PKG.deb"

@@ -142,6 +142,19 @@ Or leave an existing database alone like this:
 But be aware that if the existing database's schema is for a different
 version this may not subsequently work.
 
+
+Building a .deb package
+-----------------------
+
+This requires dpkg-deb and lintian to be installed.
+
+    ./mkdir out
+    ./package -t out
+
+This should result in a .deb file being created in `./out/`, with the
+version taken from the `version` file.
+
+
 Controlling an alias
 --------------------
 
@@ -278,4 +291,4 @@ Author
 ------
 
 Nick Stokoe - github dot wu-lee at noodlefactory dot co dot uk
-October 2015
+October 2015, updated August 2022
