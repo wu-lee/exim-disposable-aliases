@@ -1,0 +1,48 @@
+2022-08-22  Nick Stokoe  <nick@noodlefactory.co.uk>
+
+	* v0.3 release
+
+2022-08-21  Nick Stokoe  <nick@noodlefactory.co.uk>
+
+	* Delete file: macros
+
+	It isn't used.
+
+	* Build-Depends: add Perl
+
+	Because we use it in the build!
+
+	* Drop per-alias logfiles in favour of a combined.log file
+
+	This is to avoid needing to detaint the local part in order to be
+	able to set the logfile option successfully - tainting checks will
+	not allow local_part to be incorporated. Possibly later we can
+	revert, if we find the need, and if a justifiably simple and
+	secure way of detainting the filename can be found!
+
+	* Set the sqlite_dbfile variable to DISP_ALIASES_DB
+
+	And drop the obsolete per-lookup sqlite loop directives like this:
+	
+	    ${lookup sqlite{DISP_ALIASES_DB select ... } ... }
+	
+	In favour of this:
+	
+	    ${lookup sqlite{select ... } ... }
+
+	And setting sqlite_dbfile.
+	
+	We would like to retain the per-lookup specific files, mainly so
+	we can co-exist with other exim uses of Sqlite3, but since
+	tainting checks were added in 4.93, we cannot use that.  Also,
+	since per-lookup file options seem not to be present in current
+	Debian stable (11) versions of Exim, 4.94.2, we can't use that
+	feature yet.  Bump dependency on Exim to 4.94, to require
+	implementation of sqlite_dbfile.
+
+2022-08-19  Nick Stokoe  <nick@noodlefactory.co.uk>
+
+	* CHANGELOG: Added Debian package building
+
+	0.2 release
+
