@@ -52,7 +52,8 @@ endif
 testprint "got a known alias '$local_part' for '$2' prefix '$1'"
 
 # Set the logfile for this message
-logfile DISP_ALIASES_LOGDIR/$1.$local_part.log
+# (Use of per-alias logfiles has been dropped as this is hard since Exim added tainting checks)
+logfile DISP_ALIASES_LOGDIR/combined.log
 
 
 # Is it a control message sent by an authorised user on a safe
