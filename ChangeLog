@@ -1,3 +1,10 @@
+2022-08-23  Nick Stokoe  <nick@noodlefactory.co.uk>
+
+	* Don't use `service` in maintainer scripts
+
+	Use /etc/init.d/exim4 instead.  Also, do try-restart, not reload,
+	as that fails when the services is stopped.
+
 2022-08-22  Nick Stokoe  <nick@noodlefactory.co.uk>
 
 	* v0.3 release
