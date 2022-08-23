@@ -173,11 +173,8 @@ fi
 chown "$EXIMUSER:$EXIMGROUP" "$DISP_ALIASES_DB"
 chown "$EXIMUSER:$LOGGROUP" "$DISP_ALIASES_LOGDIR"
 
-# Rebuild exim config (if update-exim4.conf in path)
-[ -n `type -p update-exim4.conf` ] && update-exim4.conf
-
-# Restart exim daemon
-service exim4 reload
+# Restart exim daemon, if it is running. This will rebuild the config too
+[ -x /etc/init.d/exim4 ] && /etc/init.d/exim4 try-restart
 EOF
     
     cat >$BUILDDIR/DEBIAN/postrm <<EOF
@@ -188,8 +185,8 @@ if [ "\$1" = "purge" ]; then
     rm -rf "$DISP_ALIASES_LOGDIR"
 fi
 
-# Restart exim daemon
-service exim4 reload
+# Restart exim daemon, if it is running. This will rebuild the config too
+[ -x /etc/init.d/exim4 ] && /etc/init.d/exim4 try-restart
 EOF
 
     chmod +x "$BUILDDIR/DEBIAN/"{postrm,postinst}
